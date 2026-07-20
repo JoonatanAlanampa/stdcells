@@ -3,6 +3,7 @@
   "VERILOG_FILES": ["dir::cordic_gates.v"],
   "SYNTH_ELABORATE_ONLY": true,
   "RUN_LINTER": false,
+  "ERROR_ON_NL_ASSIGN_STATEMENTS": false,
   "CLOCK_PORT": "clk",
   "CLOCK_PERIOD": 20,
 

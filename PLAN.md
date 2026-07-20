@@ -42,6 +42,20 @@ the projected areas with real ones.
 ## HYBRID library for hardening (own combinational + hd dfxtp_1);
 ## custom DFF = stretch goal (wider template or met2).
 
+## Phase 6 STATUS (2026-07-21): CI pipeline works END-TO-END through
+## global routing (7 debug iterations: billing → image tag → node-in-
+## container → linter → assign checker x2 → DRT). Blocker = LIBRARY
+## ARCHITECTURE: DRT-0073 "no access point" on NAND2/NOR2 B pins — the
+## top-region pads sit under the VPWR rail's met1 shadow (no via window).
+## Analysis: with 0.85-um folded pdiff the mid-band is too narrow for any
+## poly contact (pdiff licon clearance 0.19), flanks are unreachable
+## through outer gates, higher straps merge with the mirrored neighbor.
+## CONCLUSION: fat folded PMOS is incompatible with in-cell pin access —
+## this is WHY hd sizes Wp<=1.0 single-finger with a wide mid-band.
+## → V2 LIBRARY path: hd-like sizing (Wp 1.0/Wn 0.65, single finger),
+## re-characterize + re-layout; v1 (symmetric-drive 2.61) stands as the
+## documented fast/fat/leaky/unroutable-pins experiment.
+
 ## Phase 6 — LEF + OpenROAD hardening in CI
 Abstract LEF from the layouts; GitHub Actions job (ubuntu + LibreLane or
 bare OpenROAD) hardens the CORDIC-1 RTL with own.lib/own.lef on the TT 1x1

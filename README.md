@@ -36,8 +36,10 @@ Same taped-out RTL, same yosys+ABC flow, two Liberty targets:
 The library is 8 cells (NOR3 and NAND3 were *dropped* after routing-cost
 analysis — library design is economics; their instances remap to NAND2/NOR2
 chains and the cost above is measured, not hidden). **All 7 combinational
-cells have DRC-clean layouts** against the official `sky130A_mr.drc` deck;
-the DFF layout is the remaining boss fight before LVS and P&R.
+cells are DRC-clean AND LVS-verified** against the official PDK KLayout
+decks (`flow/run_lvs_all.py`) — LVS promptly earned its place by catching
+a double-width NFET in the BUF cells that DRC could never see. The DFF
+layout is the remaining boss fight before P&R.
 
 The measured library is **fast, fat and leaky — by design**: svt PMOS
 (1.37× hvt drive, measured) sized at the measured 2.61 ratio makes every

@@ -522,10 +522,12 @@ def buf_cell(lib, name, s2_fingers):
     n_c = n_g + 1
     C = [0.69 + 0.46 * i for i in range(n_c)]
     G = [0.92 + 0.46 * i for i in range(n_g)]
-    W = ((2 * n_g + 2 + 2) * HALF // SITE + 1) * SITE
     import math
     W = math.ceil((C[-1] + 0.375) / SITE) * SITE
-    nd0, nd1, NY = 0.36, 1.01, 0.52
+    # PARALLEL fingers: ndiff is 0.325 tall (2 fingers = netlist W), NOT
+    # the 0.65 of series-chain cells. Getting this wrong drew double-width
+    # nfets — caught by LVS, invisible to DRC.
+    nd0, nd1, NY = 0.36, 0.685, 0.52
     pd0, pd1 = PDIFF_Y
     BARY = (1.325, 1.495)   # 0.17 below the P-row patches (short hazard!)
     TOPY = 2.50

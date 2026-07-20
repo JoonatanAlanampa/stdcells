@@ -1,0 +1,8 @@
+* Extracted by KLayout with SKY130 LVS runset on : 20/07/2026 23:34
+
+.SUBCKT INV_X4 4 2 1 3 6
+M$1 1 4 3 5 sky130_fd_pr__pfet_01v8 L=0.15 W=6.8 AS=1.17725 AD=1.17725 PS=10.42
++ PD=10.42
+M$9 2 4 3 6 sky130_fd_pr__nfet_01v8 L=0.15 W=2.6 AS=0.450125 AD=0.450125
++ PS=5.695 PD=5.695
+.ENDS INV_X4

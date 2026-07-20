@@ -1,0 +1,8 @@
+.subckt NAND2_X1 A B Y VPWR VGND VNB
+M0 Y A VPWR nwell_i sky130_fd_pr__pfet_01v8 L=0.15u W=1.7u
+M1 Y B VPWR nwell_i sky130_fd_pr__pfet_01v8 L=0.15u W=1.7u
+M2 VGND A m1 VNB sky130_fd_pr__nfet_01v8 L=0.15u W=0.65u
+M3 m1 B Y VNB sky130_fd_pr__nfet_01v8 L=0.15u W=0.65u
+M4 Y B m2 VNB sky130_fd_pr__nfet_01v8 L=0.15u W=0.65u
+M5 m2 A VGND VNB sky130_fd_pr__nfet_01v8 L=0.15u W=0.65u
+.ends

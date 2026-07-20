@@ -1,0 +1,5 @@
+﻿out/*.sp
+out/*.log
+out/*.ys
+out/*.yslog
+__pycache__/

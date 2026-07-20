@@ -1,0 +1,9 @@
+{
+ "L": 0.15,
+ "WN_X1": 0.65,
+ "WP_over_WN": 2.61,
+ "pfet_model": "sky130_fd_pr__pfet_01v8",
+ "nfet_model": "sky130_fd_pr__nfet_01v8",
+ "idsat_n_uA_per_um": 476.884,
+ "idsat_p_uA_per_um": 182.959
+}

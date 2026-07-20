@@ -38,8 +38,18 @@ analysis — library design is economics; their instances remap to NAND2/NOR2
 chains and the cost above is measured, not hidden). **All 7 combinational
 cells are DRC-clean AND LVS-verified** against the official PDK KLayout
 decks (`flow/run_lvs_all.py`) — LVS promptly earned its place by catching
-a double-width NFET in the BUF cells that DRC could never see. The DFF
-layout is the remaining boss fight before P&R.
+a double-width NFET in the BUF cells that DRC could never see.
+
+**Sequential cells — a documented hybrid decision**: the transmission-gate
+DFF needs split-poly columns whose lower gate contact has no legal landing
+zone in this cell template (the same class of geometric dead-end that
+eliminated NAND3, but structural). Hardening therefore uses a hybrid
+library — our 7 verified combinational cells plus the foundry's
+silicon-proven `sky130_fd_sc_hd__dfxtp_1` flop — which is standard
+industry practice (flops are the most timing-critical, verification-heavy
+cells). A fully custom DFF (wider template or met2 routing) remains the
+stretch goal. LEF abstracts for P&R: `flow/make_lef.py` → `out/own.lef`,
+derived from the exact LVS-verified polygons.
 
 The measured library is **fast, fat and leaky — by design**: svt PMOS
 (1.37× hvt drive, measured) sized at the measured 2.61 ratio makes every

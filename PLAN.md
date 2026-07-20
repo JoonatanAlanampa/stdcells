@@ -36,6 +36,12 @@ the projected areas with real ones.
   extraction vs own.spice; regenerate areas + re-run phases 3-4 with
   real numbers.
 
+## Phase 5b ✅ LVS (2026-07-20) — all 7 cells MATCH; caught the BUF
+## double-width nfet bug. Phase 5c ✅ LEF abstracts (make_lef.py).
+## DFF: structural dead-end in this template (split-poly TG contacts) →
+## HYBRID library for hardening (own combinational + hd dfxtp_1);
+## custom DFF = stretch goal (wider template or met2).
+
 ## Phase 6 — LEF + OpenROAD hardening in CI
 Abstract LEF from the layouts; GitHub Actions job (ubuntu + LibreLane or
 bare OpenROAD) hardens the CORDIC-1 RTL with own.lib/own.lef on the TT 1x1

@@ -1,0 +1,19 @@
+{
+  "DESIGN_NAME": "tt_um_joonatanalanampa_cordic",
+  "VERILOG_FILES": ["dir::cordic_gates.v"],
+  "SYNTH_ELABORATE_ONLY": true,
+  "CLOCK_PORT": "clk",
+  "CLOCK_PERIOD": 20,
+
+  "EXTRA_LIBS": ["dir::../out/own_hardening.lib"],
+  "EXTRA_LEFS": ["dir::../out/own.lef"],
+  "EXTRA_GDS_FILES": ["dir::../out/own_cells.gds"],
+
+  "FP_SIZING": "relative",
+  "FP_CORE_UTIL": 55,
+  "PL_TARGET_DENSITY_PCT": 60,
+
+  "RUN_KLAYOUT_XOR": false,
+  "RUN_KLAYOUT_DRC": false,
+  "GRT_ALLOW_CONGESTION": true
+}

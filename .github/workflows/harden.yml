@@ -1,0 +1,64 @@
+name: harden
+
+on:
+  push:
+    paths:
+      - "harden/**"
+      - "out/own.lef"
+      - "out/own_hardening.lib"
+      - "out/own_cells.gds"
+      - ".github/workflows/harden.yml"
+  workflow_dispatch:
+
+jobs:
+  pnr:
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/librelane/librelane:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache sky130 PDK
+        uses: actions/cache@v4
+        with:
+          path: pdk-root
+          key: pdk-sky130-${{ runner.os }}-v1
+
+      - name: Harden CORDIC-1 with the hybrid library
+        run: |
+          export PDK_ROOT=$PWD/pdk-root
+          librelane harden/config.json
+
+      - name: Report metrics
+        if: always()
+        run: |
+          python3 - << 'EOF'
+          import glob, json, os
+          runs = sorted(glob.glob("harden/runs/*/final/metrics.json"))
+          if not runs:
+              print("no metrics.json found"); raise SystemExit(0)
+          m = json.load(open(runs[-1]))
+          keys = [k for k in m if any(s in k for s in
+                  ("design__instance", "utilization", "die__area",
+                   "core__area", "timing__setup__ws", "timing__hold__ws",
+                   "clock__skew", "route__wirelength", "antenna",
+                   "power__total"))]
+          lines = ["# Hybrid hardening metrics", ""]
+          for k in sorted(keys):
+              lines.append(f"- `{k}`: {m[k]}")
+          out = "\n".join(lines)
+          print(out)
+          with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null"),
+                    "a") as f:
+              f.write(out + "\n")
+          EOF
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hardening-run
+          path: |
+            harden/runs/*/final
+            harden/runs/*/error.log
+          if-no-files-found: warn

@@ -122,10 +122,13 @@ def dff(name):
 # NOR3 dropped from the library after phase-5 cost analysis: its series
 # pull-up would need 5.1 um of folded pfet for 11 mapped instances — ABC
 # remaps those to NOR2/INV at negligible cost. Library design is economics.
+# NAND3 also dropped after phase-5 routing analysis: its inner-solo input
+# has no legal in-row join (see layout.py) — 157 instances remap to NAND2
+# chains and the measured cost is part of the result.
 LIBRARY = [
     inv("INV_X1", 1), inv("INV_X2", 2), inv("INV_X4", 4),
     buf("BUF_X2", 2), buf("BUF_X4", 4),
-    nandN("NAND2_X1", 2, 2), nandN("NAND3_X1", 3, 2),
+    nandN("NAND2_X1", 2, 2),
     norN("NOR2_X1", 2, 1),
     dff("DFF_X1"),
 ]

@@ -158,7 +158,7 @@ def nand2_cell(lib, name):
     nd0, nd1 = 0.36, 1.01                       # ndiff 0.65 (chain fingers)
     NY = 0.52                                   # low licon row: leaves room
     pd0, pd1 = PDIFF_Y                          # for the jog's li enclosure
-    BARY = (1.575, 1.745)                       # Y li bar
+    BARY = (1.325, 1.495)   # Y li bar — 0.17 below the P-row li patches
     A_BAR = (0.985, 1.275)                      # A met1 bar (encloses mcons)
 
     rect(BND, 0, 0, W, H)
@@ -219,7 +219,10 @@ def nand2_cell(lib, name):
         rect(MCON, x - CUT / 2, 0, x + CUT / 2, CUT)
         rect(LI, x - LI_W / 2, PY_CUT - CUT / 2 - LI_ENC_LICON, x + LI_W / 2, H)
         rect(MCON, x - CUT / 2, H - CUT, x + CUT / 2, H)
-    # middle vdd tap (c2 P source): li patch -> mcon -> met1 to the rail
+    # middle vdd tap (c2 P source): NARROW li patch (licon width, y-pair
+    # enclosure) -> mcon -> met1 to the rail. NOTE: a wider patch would
+    # OVERLAP the Y bar — a same-layer different-net short that DRC merges
+    # silently and only LVS would catch; hence the bar sits 0.17 below.
     rect(LI, C[2] - CUT / 2, PY_CUT - CUT / 2 - LI_ENC_LICON,
          C[2] + CUT / 2, PY_CUT + CUT / 2 + LI_ENC_LICON)
     rect(MCON, C[2] - CUT / 2, PY_CUT - CUT / 2, C[2] + CUT / 2, PY_CUT + CUT / 2)
@@ -240,8 +243,8 @@ def nand2_cell(lib, name):
     rect(LI, C[3] - LI_W / 2, NY - CUT / 2, C[3] + LI_W / 2, BARY[1])
 
     # ---- pins ----
-    rect(LIPIN, C[1] - LI_W / 2, 1.66 - 0.085, C[1] + LI_W / 2, 1.66 + 0.085)
-    cell.add(gdstk.Label("Y", (C[1], 1.66), layer=LILBL[0], texttype=LILBL[1]))
+    rect(LIPIN, C[1] - LI_W / 2, 1.41 - 0.085, C[1] + LI_W / 2, 1.41 + 0.085)
+    cell.add(gdstk.Label("Y", (C[1], 1.41), layer=LILBL[0], texttype=LILBL[1]))
     rect(LIPIN, BP - CUT / 2, TOP_Y - 0.085, BP + CUT / 2, TOP_Y + 0.085)
     cell.add(gdstk.Label("B", (BP, TOP_Y), layer=LILBL[0], texttype=LILBL[1]))
     cell.add(gdstk.Label("A", (PAD_L, A_BAR[0] + 0.07), layer=MET1LBL[0],
@@ -373,6 +376,247 @@ def nor2_cell(lib, name):
     return W
 
 
+def _mk(cell):
+    def rect(layer, x0, y0, x1, y1):
+        cell.add(gdstk.rectangle((round(x0, 3), round(y0, 3)),
+                                 (round(x1, 3), round(y1, 3)),
+                                 layer=layer[0], datatype=layer[1]))
+    return rect
+
+
+def nand3_cell(lib, name):
+    """NAND3, two ABC/CBA chains (2x stack comp — see cells.py). Net-to-
+    resource assignment forced by adjacency analysis: with 2 chains of 3,
+    exactly one net pairs at the chain boundary (C: top strap+pad), one
+    lands on the outer gates (A: flanking pads + met1 bar), and one is
+    stuck on inner solos (B) — solved with top pads joined by an li bar
+    running OVER the pdiff at y2.09-2.26, which requires every li stub it
+    crosses to be absent: mid vdd taps (c2,c4) escape on met1, and the
+    P-row licon patches take x-side enclosures so their tops stop 0.17
+    below the bar."""
+    cell = gdstk.Cell(name)
+    rect = _mk(cell)
+    C = [0.69 + 0.46 * i for i in range(7)]
+    G = [0.92 + 0.46 * i for i in range(6)]     # A B C C B A
+    PAD_L, PAD_R = 0.23, 3.91
+    W = 10 * SITE
+    nd0, nd1, NY = 0.36, 1.01, 0.52
+    pd0, pd1 = PDIFF_Y
+    BARY = (1.575, 1.745)
+    A_BAR = (0.985, 1.275)
+    B_BAR = (2.09, 2.26)
+    BPADY = 2.51                                 # B/C top pad licon row
+
+    rect(BND, 0, 0, W, H)
+    rect(MET1, 0, -RAIL_W / 2, W, RAIL_W / 2)
+    rect(MET1, 0, H - RAIL_W / 2, W, H + RAIL_W / 2)
+    dx0 = C[0] - CUT / 2 - DIFF_ENC_LICON
+    dx1 = C[-1] + CUT / 2 + DIFF_ENC_LICON
+    rect(DIFF, dx0, pd0, dx1, pd1)
+    rect(DIFF, dx0, nd0, dx1, nd1)
+    rect(PSDM, dx0 - SDM_ENC, pd0 - SDM_ENC, dx1 + SDM_ENC, pd1 + SDM_ENC)
+    rect(NSDM, dx0 - SDM_ENC, nd0 - SDM_ENC, dx1 + SDM_ENC, nd1 + SDM_ENC)
+    rect(NWELL, dx0 - NWELL_ENC, pd0 - NWELL_ENC, dx1 + NWELL_ENC, H + 0.19)
+
+    for xg in G:
+        rect(POLY, xg - LGATE / 2, nd0 - POLY_ENDCAP,
+             xg + LGATE / 2, pd1 + POLY_ENDCAP)
+
+    # A (outer): flanking pads + met1 bar
+    for px, xg in ((PAD_L, G[0]), (PAD_R, G[5])):
+        rect(POLY, min(px, xg) - (POLY_PAD / 2 if px < xg else LGATE / 2),
+             1.055, max(px, xg) +
+             (POLY_PAD / 2 if px > xg else LGATE / 2), 1.205)
+        rect(POLY, px - POLY_PAD / 2, PAD_Y - POLY_PAD / 2,
+             px + POLY_PAD / 2, PAD_Y + POLY_PAD / 2)
+        rect(NPC, px - CUT / 2 - NPC_ENC, PAD_Y - CUT / 2 - NPC_ENC,
+             px + CUT / 2 + NPC_ENC, PAD_Y + CUT / 2 + NPC_ENC)
+        rect(LICON, px - CUT / 2, PAD_Y - CUT / 2, px + CUT / 2, PAD_Y + CUT / 2)
+        rect(LI, px - CUT / 2, PAD_Y - CUT / 2 - LI_ENC_LICON,
+             px + CUT / 2, PAD_Y + CUT / 2 + LI_ENC_LICON)
+        rect(MCON, px - CUT / 2, PAD_Y - CUT / 2, px + CUT / 2, PAD_Y + CUT / 2)
+    rect(MET1, PAD_L - CUT / 2 - 0.06, A_BAR[0], PAD_R + CUT / 2 + 0.06, A_BAR[1])
+
+    # C (chain-boundary pair g2,g3): fingers up + strap + raised top pad
+    for xg in (G[2], G[3]):
+        rect(POLY, xg - LGATE / 2, pd1 + POLY_ENDCAP, xg + LGATE / 2, 2.68)
+    rect(POLY, G[2] - LGATE / 2, 2.35, G[3] + LGATE / 2, 2.50)
+    CPX = 2.07
+    rect(POLY, CPX - POLY_PAD / 2, BPADY - POLY_PAD / 2,
+         CPX + POLY_PAD / 2, BPADY + POLY_PAD / 2)
+    rect(NPC, CPX - CUT / 2 - NPC_ENC, BPADY - CUT / 2 - NPC_ENC,
+         CPX + CUT / 2 + NPC_ENC, BPADY + CUT / 2 + NPC_ENC)
+    rect(LICON, CPX - CUT / 2, BPADY - CUT / 2, CPX + CUT / 2, BPADY + CUT / 2)
+    rect(LI, CPX - CUT / 2 - LI_ENC_LICON, BPADY - CUT / 2,
+         CPX + CUT / 2 + LI_ENC_LICON, BPADY + CUT / 2)     # x-side enclosure
+
+    # B (inner solos g1,g4): top pads + stubs + li bar over the pdiff
+    for xg in (G[1], G[4]):
+        rect(POLY, xg - LGATE / 2, pd1 + POLY_ENDCAP, xg + LGATE / 2, 2.675)
+        rect(POLY, xg - POLY_PAD / 2, BPADY - POLY_PAD / 2 - 0.005,
+             xg + POLY_PAD / 2, BPADY + POLY_PAD / 2 - 0.005)
+        rect(NPC, xg - CUT / 2 - NPC_ENC, BPADY - CUT / 2 - NPC_ENC,
+             xg + CUT / 2 + NPC_ENC, BPADY + CUT / 2 + NPC_ENC)
+        rect(LICON, xg - CUT / 2, BPADY - CUT / 2, xg + CUT / 2, BPADY + CUT / 2)
+        rect(LI, xg - CUT / 2 - LI_ENC_LICON, BPADY - CUT / 2,
+             xg + CUT / 2 + LI_ENC_LICON, BPADY + CUT / 2)  # x-side enc
+        rect(LI, xg - CUT / 2, B_BAR[0], xg + CUT / 2, BPADY - CUT / 2)
+    rect(LI, G[1] - CUT / 2, B_BAR[0], G[4] + CUT / 2, B_BAR[1])
+
+    # licons: P all columns, N chain ends
+    for x in C:
+        rect(LICON, x - CUT / 2, PY_CUT - CUT / 2, x + CUT / 2, PY_CUT + CUT / 2)
+    for x in (C[0], C[3], C[6]):
+        rect(LICON, x - CUT / 2, NY - CUT / 2, x + CUT / 2, NY + CUT / 2)
+
+    # vdd: c0,c6 li stubs to rail; c2,c4 met1 escapes (B bar crosses there)
+    for x in (C[0], C[6]):
+        rect(LI, x - LI_W / 2, PY_CUT - CUT / 2 - LI_ENC_LICON, x + LI_W / 2, H)
+        rect(MCON, x - CUT / 2, H - CUT, x + CUT / 2, H)
+    for x in (C[2], C[4]):
+        rect(LI, x - CUT / 2 - LI_ENC_LICON, PY_CUT - CUT / 2,
+             x + CUT / 2 + LI_ENC_LICON, PY_CUT + CUT / 2)  # x-side enc
+        rect(MCON, x - CUT / 2, PY_CUT - CUT / 2, x + CUT / 2, PY_CUT + CUT / 2)
+        rect(MET1, x - CUT / 2 - 0.06, PY_CUT - CUT / 2 - 0.06, x + CUT / 2 + 0.06, H)
+    # vss: chain ends c0,c6
+    for x in (C[0], C[6]):
+        rect(LI, x - LI_W / 2, 0, x + LI_W / 2, NY + CUT / 2 + LI_ENC_LICON)
+        rect(MCON, x - CUT / 2, 0, x + CUT / 2, CUT)
+
+    # Y: P drains c1,c5 (x-side-enc patches + stubs to the bar), N+P at c3
+    for x in (C[1], C[5]):
+        rect(LI, x - CUT / 2 - LI_ENC_LICON, PY_CUT - CUT / 2,
+             x + CUT / 2 + LI_ENC_LICON, PY_CUT + CUT / 2)
+        rect(LI, x - LI_W / 2, BARY[0], x + LI_W / 2, PY_CUT + CUT / 2)
+    rect(LI, C[3] - CUT / 2, NY - CUT / 2 - LI_ENC_LICON,
+         C[3] + CUT / 2, NY + CUT / 2 + LI_ENC_LICON)
+    rect(LI, C[3] - CUT / 2 - LI_ENC_LICON, PY_CUT - CUT / 2,
+         C[3] + CUT / 2 + LI_ENC_LICON, PY_CUT + CUT / 2)
+    rect(LI, C[3] - LI_W / 2, NY, C[3] + LI_W / 2, PY_CUT + CUT / 2)
+    rect(LI, C[1] - LI_W / 2, BARY[0], C[5] + LI_W / 2, BARY[1])
+
+    # pins
+    rect(LIPIN, C[1] - LI_W / 2, 1.66 - 0.085, C[1] + LI_W / 2, 1.66 + 0.085)
+    cell.add(gdstk.Label("Y", (C[1], 1.66), layer=LILBL[0], texttype=LILBL[1]))
+    rect(LIPIN, G[3] - 0.085, 2.175 - 0.085, G[3] + 0.085, 2.175 + 0.085)
+    cell.add(gdstk.Label("B", (G[3], 2.175), layer=LILBL[0], texttype=LILBL[1]))
+    rect(LIPIN, CPX - 0.085, BPADY - 0.085, CPX + 0.085, BPADY + 0.085)
+    cell.add(gdstk.Label("C", (CPX, BPADY), layer=LILBL[0], texttype=LILBL[1]))
+    cell.add(gdstk.Label("A", (PAD_L, A_BAR[0] + 0.07), layer=MET1LBL[0],
+                         texttype=MET1LBL[1]))
+    cell.add(gdstk.Label("VPWR", (W / 2, H), layer=MET1LBL[0], texttype=MET1LBL[1]))
+    cell.add(gdstk.Label("VGND", (W / 2, 0), layer=MET1LBL[0], texttype=MET1LBL[1]))
+    lib.add(cell)
+    return W
+
+
+def buf_cell(lib, name, s2_fingers):
+    """BUF: stage-1 inverter (2 fingers, gates A) + stage-2 inverter
+    (s2_fingers, gates yb). A: top strap+pad at the c0 column (its vdd
+    stub becomes a met1 escape). yb: the c1 drain column rises past the
+    P row and runs right at top to a pad on the stage-2 gate strap; every
+    vdd li stub the run or the Y bar would cross is met1-escaped."""
+    cell = gdstk.Cell(name)
+    rect = _mk(cell)
+    n_g = 2 + s2_fingers
+    n_c = n_g + 1
+    C = [0.69 + 0.46 * i for i in range(n_c)]
+    G = [0.92 + 0.46 * i for i in range(n_g)]
+    W = ((2 * n_g + 2 + 2) * HALF // SITE + 1) * SITE
+    import math
+    W = math.ceil((C[-1] + 0.375) / SITE) * SITE
+    nd0, nd1, NY = 0.36, 1.01, 0.52
+    pd0, pd1 = PDIFF_Y
+    BARY = (1.325, 1.495)   # 0.17 below the P-row patches (short hazard!)
+    TOPY = 2.50
+
+    rect(BND, 0, 0, W, H)
+    rect(MET1, 0, -RAIL_W / 2, W, RAIL_W / 2)
+    rect(MET1, 0, H - RAIL_W / 2, W, H + RAIL_W / 2)
+    dx0 = C[0] - CUT / 2 - DIFF_ENC_LICON
+    dx1 = C[-1] + CUT / 2 + DIFF_ENC_LICON
+    rect(DIFF, dx0, pd0, dx1, pd1)
+    rect(DIFF, dx0, nd0, dx1, nd1)
+    rect(PSDM, dx0 - SDM_ENC, pd0 - SDM_ENC, dx1 + SDM_ENC, pd1 + SDM_ENC)
+    rect(NSDM, dx0 - SDM_ENC, nd0 - SDM_ENC, dx1 + SDM_ENC, nd1 + SDM_ENC)
+    rect(NWELL, dx0 - NWELL_ENC, pd0 - NWELL_ENC, dx1 + NWELL_ENC, H + 0.19)
+    for xg in G:
+        rect(POLY, xg - LGATE / 2, nd0 - POLY_ENDCAP,
+             xg + LGATE / 2, pd1 + POLY_ENDCAP)
+
+    # all licons (both rows fully contacted: no series stacks)
+    for x in C:
+        rect(LICON, x - CUT / 2, PY_CUT - CUT / 2, x + CUT / 2, PY_CUT + CUT / 2)
+        rect(LICON, x - CUT / 2, NY - CUT / 2, x + CUT / 2, NY + CUT / 2)
+
+    vdd_cols = C[0::2]                        # even: supplies
+    y_cols = [C[i] for i in range(3, n_c, 2)]  # stage-2 drains
+    # met1-escaped vdd: c0 (A pad above), c2 (yb run), plus every vdd
+    # column the Y bar spans (between first and last stage-2 drains)
+    esc = {C[0], C[2]} | {x for x in vdd_cols if y_cols[0] < x < y_cols[-1]}
+    for x in vdd_cols:
+        if x in esc:
+            rect(LI, x - CUT / 2, PY_CUT - CUT / 2 - LI_ENC_LICON,
+                 x + CUT / 2, PY_CUT + CUT / 2 + LI_ENC_LICON)
+            rect(MCON, x - CUT / 2, PY_CUT - CUT / 2, x + CUT / 2,
+                 PY_CUT + CUT / 2)
+            rect(MET1, x - CUT / 2 - 0.06, PY_CUT - CUT / 2 - 0.06,
+                 x + CUT / 2 + 0.06, H)
+        else:
+            rect(LI, x - LI_W / 2, PY_CUT - CUT / 2 - LI_ENC_LICON,
+                 x + LI_W / 2, H)
+            rect(MCON, x - CUT / 2, H - CUT, x + CUT / 2, H)
+        rect(LI, x - LI_W / 2, 0, x + LI_W / 2, NY + CUT / 2 + LI_ENC_LICON)
+        rect(MCON, x - CUT / 2, 0, x + CUT / 2, CUT)
+
+    # A: stage-1 strap + pad at the c0 column, all at top
+    for xg in (G[0], G[1]):
+        rect(POLY, xg - LGATE / 2, pd1 + POLY_ENDCAP, xg + LGATE / 2,
+             TOPY + 0.075)
+    rect(POLY, C[0] - POLY_PAD / 2, TOPY - 0.075, G[1] + LGATE / 2, TOPY + 0.075)
+    rect(POLY, C[0] - POLY_PAD / 2, TOPY - POLY_PAD / 2,
+         C[0] + POLY_PAD / 2, TOPY + POLY_PAD / 2)
+    rect(NPC, C[0] - CUT / 2 - NPC_ENC, TOPY - CUT / 2 - NPC_ENC,
+         C[0] + CUT / 2 + NPC_ENC, TOPY + CUT / 2 + NPC_ENC)
+    rect(LICON, C[0] - CUT / 2, TOPY - CUT / 2, C[0] + CUT / 2, TOPY + CUT / 2)
+    rect(LI, C[0] - CUT / 2, TOPY - CUT / 2 - LI_ENC_LICON,
+         C[0] + CUT / 2, TOPY + CUT / 2 + LI_ENC_LICON)
+
+    # yb: c1 vertical (drain of both rows) up to a top run, right to the
+    # stage-2 gate strap pad on G[2]
+    rect(LI, C[1] - CUT / 2, NY - CUT / 2 - LI_ENC_LICON,
+         C[1] + CUT / 2, PY_CUT + CUT / 2 + LI_ENC_LICON)
+    rect(LI, C[1] - LI_W / 2, NY, C[1] + LI_W / 2, TOPY + CUT / 2 + LI_ENC_LICON)
+    rect(LI, C[1] - LI_W / 2, TOPY - CUT / 2 - LI_ENC_LICON,
+         G[2] + CUT / 2 + LI_ENC_LICON, TOPY + CUT / 2 + LI_ENC_LICON)
+    for xg in G[2:]:
+        rect(POLY, xg - LGATE / 2, pd1 + POLY_ENDCAP, xg + LGATE / 2, 2.675)
+    rect(POLY, G[2] - LGATE / 2, 2.35, G[-1] + LGATE / 2, 2.50)
+    rect(POLY, G[2] - POLY_PAD / 2, TOPY - POLY_PAD / 2 - 0.005,
+         G[2] + POLY_PAD / 2, TOPY + POLY_PAD / 2 - 0.005)
+    rect(NPC, G[2] - CUT / 2 - NPC_ENC, TOPY - CUT / 2 - NPC_ENC,
+         G[2] + CUT / 2 + NPC_ENC, TOPY + CUT / 2 + NPC_ENC)
+    rect(LICON, G[2] - CUT / 2, TOPY - CUT / 2, G[2] + CUT / 2, TOPY + CUT / 2)
+
+    # Y: stage-2 drains, both rows, joined by the mid bar
+    for x in y_cols:
+        rect(LI, x - LI_W / 2, NY - CUT / 2 - LI_ENC_LICON,
+             x + LI_W / 2, PY_CUT + CUT / 2 + LI_ENC_LICON)
+    rect(LI, y_cols[0] - LI_W / 2, BARY[0], y_cols[-1] + LI_W / 2, BARY[1])
+
+    # pins
+    ypin = (y_cols[0], 1.41)
+    rect(LIPIN, ypin[0] - LI_W / 2, ypin[1] - 0.085,
+         ypin[0] + LI_W / 2, ypin[1] + 0.085)
+    cell.add(gdstk.Label("Y", ypin, layer=LILBL[0], texttype=LILBL[1]))
+    rect(LIPIN, C[0] - 0.085, TOPY - 0.085, C[0] + 0.085, TOPY + 0.085)
+    cell.add(gdstk.Label("A", (C[0], TOPY), layer=LILBL[0], texttype=LILBL[1]))
+    cell.add(gdstk.Label("VPWR", (W / 2, H), layer=MET1LBL[0], texttype=MET1LBL[1]))
+    cell.add(gdstk.Label("VGND", (W / 2, 0), layer=MET1LBL[0], texttype=MET1LBL[1]))
+    lib.add(cell)
+    return W
+
+
 areas = {}
 outdir = Path(__file__).parents[1] / "out"
 for name, fingers in (("INV_X1", 2), ("INV_X2", 4), ("INV_X4", 8)):
@@ -384,7 +628,14 @@ for name, fingers in (("INV_X1", 2), ("INV_X2", 4), ("INV_X4", 8)):
     print(f"{name}: {fingers} fingers, W = {w:.2f} um ({w/SITE:.0f} sites), "
           f"area {areas[name]} um2 -> {gds.name}")
 
-for name, fn in (("NAND2_X1", nand2_cell), ("NOR2_X1", nor2_cell)):
+# NAND3 is NOT generated: routing analysis proved its inner-solo input has
+# no legal li join slot in this template (the bar needs 0.17 clearance both
+# to the P-row patches below and the top pads above — the window is 0.085).
+# It is dropped from the library (cells.py); its 157 instances remap to
+# NAND2 chains, and that measured cost is part of the PPA result.
+for name, fn in (("NAND2_X1", nand2_cell), ("NOR2_X1", nor2_cell),
+                 ("BUF_X2", lambda l, n: buf_cell(l, n, 4)),
+                 ("BUF_X4", lambda l, n: buf_cell(l, n, 8))):
     lib = gdstk.Library("own_cells", unit=1e-6, precision=1e-9)
     w = fn(lib, name)
     lib.write_gds(str(outdir / f"{name.lower()}.gds"))

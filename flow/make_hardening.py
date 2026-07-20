@@ -37,6 +37,8 @@ dfflegalize -cell $_DFF_P_ x
 dfflibmap -liberty "{HD_LIB}"
 abc -liberty "{OUT / 'own_hardening.lib'}"
 opt_clean -purge
+hilomap -hicell sky130_fd_sc_hd__conb_1 HI -locell sky130_fd_sc_hd__conb_1 LO
+insbuf -buf BUF_X2 A Y
 stat
 write_verilog -noattr -nohex -nodec "{HARDEN / 'cordic_gates.v'}"
 """

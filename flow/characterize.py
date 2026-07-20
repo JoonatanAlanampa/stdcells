@@ -171,6 +171,15 @@ def table(name, rows):
         }}"""
 
 
+# real layout areas override the projected site model where cells exist
+import json
+_ar = OUT / "areas_real.json"
+if _ar.exists():
+    real = json.loads(_ar.read_text())
+    for c in LIBRARY:
+        if c.name in real:
+            c.area = real[c.name]
+
 print("characterizing", len(LIBRARY), "cells ...")
 lib_cells = []
 for cell in LIBRARY:

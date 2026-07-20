@@ -28,9 +28,9 @@ Same taped-out RTL, same yosys+ABC flow, two Liberty targets:
 
 | metric | **own library** | sky130_fd_sc_hd | ratio own/hd |
 |---|---|---|---|
-| mapped cells | 1796 | 969 | 1.85 |
-| chip area (µm², own = projected) | 15 446 | 8 139 | **1.90** |
-| ABC critical path (ps) | **773** | 3 525 | **0.22** |
+| mapped cells | 1691 | 969 | 1.75 |
+| chip area (µm²; own = real for 5/9 cells) | 16 481 | 8 139 | **2.02** |
+| ABC critical path (ps) | **724** | 3 525 | **0.21** |
 | meets the tapeout's 50 MHz | YES | YES | — |
 
 The measured library is **fast, fat and leaky — by design**: svt PMOS

@@ -60,11 +60,15 @@ def buf(name, scale):
                  ("n", "Y", "yb", "vss", round(WN * scale, 2))])
 
 
-def nandN(name, n):
+def nandN(name, n, stack_comp):
+    """Layout reality (phase 5) capped the stack compensation: NAND2 keeps
+    the full 2x (two 0.65 um chain fingers); NAND3 is de-rated to 2x as
+    well — 3x would need 1.95 um = three chains, whose third input cannot
+    be routed in-row. The slower NAND3 fall is measured, not hidden."""
     ins = ["A", "B", "C"][:n]
     mos = [("p", "Y", x, "vdd", WP) for x in ins]
     node = "Y"
-    wn = round(WN * n, 2)                      # series stack compensation
+    wn = round(WN * stack_comp, 2)
     for i, x in enumerate(ins):
         nxt = "vss" if i == n - 1 else f"m{i}"
         mos.append(("n", node, x, nxt, wn))
@@ -72,9 +76,12 @@ def nandN(name, n):
     return Cell(name, ins, "Y", "(!(" + "&".join(ins) + "))", mos)
 
 
-def norN(name, n):
+def norN(name, n, stack_comp):
+    """NOR2 de-rated to NO pull-up stack compensation: 2x would need
+    3.4 um series pfets (four folded chains) that explode the cell. The
+    ~2x slower rise is a documented, characterized design decision."""
     ins = ["A", "B", "C"][:n]
-    wp = round(WP * n, 2)
+    wp = round(WP * stack_comp, 2)
     mos = []
     node = "vdd"
     for i, x in enumerate(ins):
@@ -112,11 +119,14 @@ def dff(name):
     return Cell(name, ["D", "CLK"], "Q", None, m, clocked="CLK")
 
 
+# NOR3 dropped from the library after phase-5 cost analysis: its series
+# pull-up would need 5.1 um of folded pfet for 11 mapped instances — ABC
+# remaps those to NOR2/INV at negligible cost. Library design is economics.
 LIBRARY = [
     inv("INV_X1", 1), inv("INV_X2", 2), inv("INV_X4", 4),
     buf("BUF_X2", 2), buf("BUF_X4", 4),
-    nandN("NAND2_X1", 2), nandN("NAND3_X1", 3),
-    norN("NOR2_X1", 2), norN("NOR3_X1", 3),
+    nandN("NAND2_X1", 2, 2), nandN("NAND3_X1", 3, 2),
+    norN("NOR2_X1", 2, 1),
     dff("DFF_X1"),
 ]
 

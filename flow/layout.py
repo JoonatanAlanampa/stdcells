@@ -192,16 +192,20 @@ def nand2_cell(lib, name):
         rect(MCON, px - CUT / 2, PAD_Y - CUT / 2, px + CUT / 2, PAD_Y + CUT / 2)
     rect(MET1, PAD_L - CUT / 2 - 0.06, A_BAR[0], PAD_R + CUT / 2 + 0.06, A_BAR[1])
 
-    # ---- input B: poly strap between G1,G2 + pad on the strap ----
-    BP = 1.38
-    rect(POLY, G[1] - LGATE / 2, 1.055, G[2] + LGATE / 2, 1.205)
-    rect(POLY, BP - POLY_PAD / 2, PAD_Y - POLY_PAD / 2,
-         BP + POLY_PAD / 2, PAD_Y + POLY_PAD / 2)
-    rect(NPC, BP - CUT / 2 - NPC_ENC, PAD_Y - CUT / 2 - NPC_ENC,
-         BP + CUT / 2 + NPC_ENC, PAD_Y + CUT / 2 + NPC_ENC)
-    rect(LICON, BP - CUT / 2, PAD_Y - CUT / 2, BP + CUT / 2, PAD_Y + CUT / 2)
-    rect(LI, BP - CUT / 2, PAD_Y - CUT / 2 - LI_ENC_LICON,
-         BP + CUT / 2, PAD_Y + CUT / 2 + LI_ENC_LICON)
+    # ---- input B: strap + pad ABOVE the pdiff (the mid-band cannot host a
+    # pad without the poly dipping into a diff -> parasitic gate / LVS fail)
+    BP, TOP_Y = 1.38, 2.50
+    for xg in (G[1], G[2]):                     # extend B fingers upward
+        rect(POLY, xg - LGATE / 2, pd1 + POLY_ENDCAP, xg + LGATE / 2,
+             TOP_Y + 0.075)
+    rect(POLY, G[1] - LGATE / 2, TOP_Y - 0.075, G[2] + LGATE / 2, TOP_Y + 0.075)
+    rect(POLY, BP - POLY_PAD / 2, TOP_Y - POLY_PAD / 2,
+         BP + POLY_PAD / 2, TOP_Y + POLY_PAD / 2)
+    rect(NPC, BP - CUT / 2 - NPC_ENC, TOP_Y - CUT / 2 - NPC_ENC,
+         BP + CUT / 2 + NPC_ENC, TOP_Y + CUT / 2 + NPC_ENC)
+    rect(LICON, BP - CUT / 2, TOP_Y - CUT / 2, BP + CUT / 2, TOP_Y + CUT / 2)
+    rect(LI, BP - CUT / 2, TOP_Y - CUT / 2 - LI_ENC_LICON,
+         BP + CUT / 2, TOP_Y + CUT / 2 + LI_ENC_LICON)
 
     # ---- licons ----
     for x in C:                                     # P row: all columns
@@ -238,8 +242,127 @@ def nand2_cell(lib, name):
     # ---- pins ----
     rect(LIPIN, C[1] - LI_W / 2, 1.66 - 0.085, C[1] + LI_W / 2, 1.66 + 0.085)
     cell.add(gdstk.Label("Y", (C[1], 1.66), layer=LILBL[0], texttype=LILBL[1]))
-    rect(LIPIN, BP - CUT / 2, PAD_Y - 0.085, BP + CUT / 2, PAD_Y + 0.085)
-    cell.add(gdstk.Label("B", (BP, PAD_Y), layer=LILBL[0], texttype=LILBL[1]))
+    rect(LIPIN, BP - CUT / 2, TOP_Y - 0.085, BP + CUT / 2, TOP_Y + 0.085)
+    cell.add(gdstk.Label("B", (BP, TOP_Y), layer=LILBL[0], texttype=LILBL[1]))
+    cell.add(gdstk.Label("A", (PAD_L, A_BAR[0] + 0.07), layer=MET1LBL[0],
+                         texttype=MET1LBL[1]))
+    cell.add(gdstk.Label("VPWR", (W / 2, H), layer=MET1LBL[0],
+                         texttype=MET1LBL[1]))
+    cell.add(gdstk.Label("VGND", (W / 2, 0), layer=MET1LBL[0],
+                         texttype=MET1LBL[1]))
+    lib.add(cell)
+    return W
+
+
+def nor2_cell(lib, name):
+    """NOR2 = NAND2 mirrored: pdiff carries two ABBA series chains (0.85
+    fingers, de-rated W — see cells.py), ndiff four parallel 0.325
+    fingers. Same routing recipe upside-down: B strap+pad on top, A
+    flanking pads + met1 bar, Y on li with a LOW bar (N drains) fed by a
+    P-drain jog at the licon row and a riser at c3; the middle vss tap
+    escapes DOWN on met1."""
+    cell = gdstk.Cell(name)
+
+    def rect(layer, x0, y0, x1, y1):
+        cell.add(gdstk.rectangle((round(x0, 3), round(y0, 3)),
+                                 (round(x1, 3), round(y1, 3)),
+                                 layer=layer[0], datatype=layer[1]))
+
+    C = [0.69, 1.15, 1.61, 2.07, 2.53]
+    G = [0.92, 1.38, 1.84, 2.30]                # A, B, B, A
+    PAD_L, PAD_R = 0.23, 2.90
+    W = 7 * SITE
+    nd0, nd1 = 0.36, 0.685                      # 4 parallel 0.325 fingers
+    NY = 0.52
+    pd0, pd1 = PDIFF_Y                          # 2 series chains, 0.85
+    BARY = (0.85, 1.02)                         # Y li bar (low band)
+    A_BAR = (1.115, 1.405)                      # A met1 bar
+    PAD_YY = 1.26                               # flanking pad licon row
+    BP, TOP_Y = 1.38, 2.50
+
+    rect(BND, 0, 0, W, H)
+    rect(MET1, 0, -RAIL_W / 2, W, RAIL_W / 2)
+    rect(MET1, 0, H - RAIL_W / 2, W, H + RAIL_W / 2)
+
+    dx0 = C[0] - CUT / 2 - DIFF_ENC_LICON
+    dx1 = C[-1] + CUT / 2 + DIFF_ENC_LICON
+    rect(DIFF, dx0, pd0, dx1, pd1)
+    rect(DIFF, dx0, nd0, dx1, nd1)
+    rect(PSDM, dx0 - SDM_ENC, pd0 - SDM_ENC, dx1 + SDM_ENC, pd1 + SDM_ENC)
+    rect(NSDM, dx0 - SDM_ENC, nd0 - SDM_ENC, dx1 + SDM_ENC, nd1 + SDM_ENC)
+    rect(NWELL, dx0 - NWELL_ENC, pd0 - NWELL_ENC, dx1 + NWELL_ENC, H + 0.19)
+
+    for xg in G:
+        rect(POLY, xg - LGATE / 2, nd0 - POLY_ENDCAP,
+             xg + LGATE / 2, pd1 + POLY_ENDCAP)
+
+    # A: flanking pads + met1 bar
+    for px, xg in ((PAD_L, G[0]), (PAD_R, G[3])):
+        rect(POLY, min(px, xg) - (POLY_PAD / 2 if px < xg else LGATE / 2),
+             PAD_YY - 0.075, max(px, xg) +
+             (POLY_PAD / 2 if px > xg else LGATE / 2), PAD_YY + 0.075)
+        rect(POLY, px - POLY_PAD / 2, PAD_YY - POLY_PAD / 2,
+             px + POLY_PAD / 2, PAD_YY + POLY_PAD / 2)
+        rect(NPC, px - CUT / 2 - NPC_ENC, PAD_YY - CUT / 2 - NPC_ENC,
+             px + CUT / 2 + NPC_ENC, PAD_YY + CUT / 2 + NPC_ENC)
+        rect(LICON, px - CUT / 2, PAD_YY - CUT / 2,
+             px + CUT / 2, PAD_YY + CUT / 2)
+        rect(LI, px - CUT / 2, PAD_YY - CUT / 2 - LI_ENC_LICON,
+             px + CUT / 2, PAD_YY + CUT / 2 + LI_ENC_LICON)
+        rect(MCON, px - CUT / 2, PAD_YY - CUT / 2,
+             px + CUT / 2, PAD_YY + CUT / 2)
+    rect(MET1, PAD_L - CUT / 2 - 0.06, A_BAR[0],
+         PAD_R + CUT / 2 + 0.06, A_BAR[1])
+
+    # B: strap + pad above the pdiff
+    for xg in (G[1], G[2]):
+        rect(POLY, xg - LGATE / 2, pd1 + POLY_ENDCAP, xg + LGATE / 2,
+             TOP_Y + 0.075)
+    rect(POLY, G[1] - LGATE / 2, TOP_Y - 0.075, G[2] + LGATE / 2, TOP_Y + 0.075)
+    rect(POLY, BP - POLY_PAD / 2, TOP_Y - POLY_PAD / 2,
+         BP + POLY_PAD / 2, TOP_Y + POLY_PAD / 2)
+    rect(NPC, BP - CUT / 2 - NPC_ENC, TOP_Y - CUT / 2 - NPC_ENC,
+         BP + CUT / 2 + NPC_ENC, TOP_Y + CUT / 2 + NPC_ENC)
+    rect(LICON, BP - CUT / 2, TOP_Y - CUT / 2, BP + CUT / 2, TOP_Y + CUT / 2)
+    rect(LI, BP - CUT / 2, TOP_Y - CUT / 2 - LI_ENC_LICON,
+         BP + CUT / 2, TOP_Y + CUT / 2 + LI_ENC_LICON)
+
+    # licons: N row all columns; P row chain ends only
+    for x in C:
+        rect(LICON, x - CUT / 2, NY - CUT / 2, x + CUT / 2, NY + CUT / 2)
+    for x in (C[0], C[2], C[4]):
+        rect(LICON, x - CUT / 2, PY_CUT - CUT / 2, x + CUT / 2, PY_CUT + CUT / 2)
+
+    # rails: vdd P sources c0,c4 up; vss N sources c0,c2?no — c0,c2,c4 are
+    # vss on N; but c2 needs the met1 escape (Y bar occupies li below? no —
+    # Y bar is at 0.85..1.02, c2 stub down 0..0.605 does not cross it).
+    for x in (C[0], C[4]):
+        rect(LI, x - LI_W / 2, PY_CUT - CUT / 2 - LI_ENC_LICON, x + LI_W / 2, H)
+        rect(MCON, x - CUT / 2, H - CUT, x + CUT / 2, H)
+    for x in (C[0], C[4]):
+        rect(LI, x - LI_W / 2, 0, x + LI_W / 2, NY + CUT / 2 + LI_ENC_LICON)
+        rect(MCON, x - CUT / 2, 0, x + CUT / 2, CUT)
+    # c2 stub: licon enclosure on the x-sides — the top would come within
+    # 0.165 of the Y bar (li.3 wants 0.17)
+    rect(LI, C[2] - CUT / 2 - LI_ENC_LICON, 0,
+         C[2] + CUT / 2 + LI_ENC_LICON, NY + CUT / 2)
+    rect(MCON, C[2] - CUT / 2, 0, C[2] + CUT / 2, CUT)
+
+    # Y: N drains c1,c3 stubs up to the low bar; P drain c2 jogs right at
+    # the P licon row and rises down the c3 column
+    for x in (C[1], C[3]):
+        rect(LI, x - LI_W / 2, NY - CUT / 2 - LI_ENC_LICON, x + LI_W / 2,
+             BARY[1])
+    rect(LI, C[1] - LI_W / 2, BARY[0], C[3] + LI_W / 2, BARY[1])
+    rect(LI, C[2] - CUT / 2, PY_CUT - CUT / 2 - LI_ENC_LICON,
+         C[3] + LI_W / 2, PY_CUT + CUT / 2 + LI_ENC_LICON)
+    rect(LI, C[3] - LI_W / 2, BARY[0], C[3] + LI_W / 2, PY_CUT + CUT / 2)
+
+    # pins
+    rect(LIPIN, C[1] - LI_W / 2, 0.935 - 0.085, C[1] + LI_W / 2, 0.935 + 0.085)
+    cell.add(gdstk.Label("Y", (C[1], 0.935), layer=LILBL[0], texttype=LILBL[1]))
+    rect(LIPIN, BP - CUT / 2, TOP_Y - 0.085, BP + CUT / 2, TOP_Y + 0.085)
+    cell.add(gdstk.Label("B", (BP, TOP_Y), layer=LILBL[0], texttype=LILBL[1]))
     cell.add(gdstk.Label("A", (PAD_L, A_BAR[0] + 0.07), layer=MET1LBL[0],
                          texttype=MET1LBL[1]))
     cell.add(gdstk.Label("VPWR", (W / 2, H), layer=MET1LBL[0],
@@ -261,12 +384,13 @@ for name, fingers in (("INV_X1", 2), ("INV_X2", 4), ("INV_X4", 8)):
     print(f"{name}: {fingers} fingers, W = {w:.2f} um ({w/SITE:.0f} sites), "
           f"area {areas[name]} um2 -> {gds.name}")
 
-lib = gdstk.Library("own_cells", unit=1e-6, precision=1e-9)
-w = nand2_cell(lib, "NAND2_X1")
-lib.write_gds(str(outdir / "nand2_x1.gds"))
-areas["NAND2_X1"] = round(w * H, 4)
-print(f"NAND2_X1: W = {w:.2f} um ({w/SITE:.0f} sites), "
-      f"area {areas['NAND2_X1']} um2 -> nand2_x1.gds")
+for name, fn in (("NAND2_X1", nand2_cell), ("NOR2_X1", nor2_cell)):
+    lib = gdstk.Library("own_cells", unit=1e-6, precision=1e-9)
+    w = fn(lib, name)
+    lib.write_gds(str(outdir / f"{name.lower()}.gds"))
+    areas[name] = round(w * H, 4)
+    print(f"{name}: W = {w:.2f} um ({w/SITE:.0f} sites), "
+          f"area {areas[name]} um2 -> {name.lower()}.gds")
 
 import json
 (outdir / "areas_real.json").write_text(json.dumps(areas, indent=1))

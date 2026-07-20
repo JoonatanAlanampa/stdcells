@@ -28,10 +28,16 @@ Same taped-out RTL, same yosys+ABC flow, two Liberty targets:
 
 | metric | **own library** | sky130_fd_sc_hd | ratio own/hd |
 |---|---|---|---|
-| mapped cells | 1691 | 969 | 1.75 |
-| chip area (µm²; own = real for 5/9 cells) | 16 481 | 8 139 | **2.02** |
-| ABC critical path (ps) | **724** | 3 525 | **0.21** |
+| mapped cells | 1783 | 969 | 1.84 |
+| chip area (µm²; own = real layouts, DFF projected) | 17 686 | 8 139 | **2.17** |
+| ABC critical path (ps) | **913** | 3 525 | **0.26** |
 | meets the tapeout's 50 MHz | YES | YES | — |
+
+The library is 8 cells (NOR3 and NAND3 were *dropped* after routing-cost
+analysis — library design is economics; their instances remap to NAND2/NOR2
+chains and the cost above is measured, not hidden). **All 7 combinational
+cells have DRC-clean layouts** against the official `sky130A_mr.drc` deck;
+the DFF layout is the remaining boss fight before LVS and P&R.
 
 The measured library is **fast, fat and leaky — by design**: svt PMOS
 (1.37× hvt drive, measured) sized at the measured 2.61 ratio makes every

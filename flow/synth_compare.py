@@ -57,8 +57,8 @@ rep.append("# CORDIC-1 synthesis PPA: own library vs sky130_fd_sc_hd\n")
 rep.append("Same RTL (taped-out sources), same yosys flow, two Liberty "
            "targets.\nOwn-library timing/leakage: measured by our ngspice "
            "characterizer; own-library\nareas: REAL (DRC-clean layouts) for "
-           "INV_X1/X2/X4, NAND2, NOR2 — projected site\nmodel for the rest. "
-           "Foundry numbers: official PDK Liberty.\n")
+           "all cells except the DFF (projected).\nFoundry numbers: official "
+           "PDK Liberty.\n")
 rep.append("| metric | own library | sky130_fd_sc_hd | ratio own/hd |")
 rep.append("|---|---|---|---|")
 rep.append(f"| mapped cells | {own['n_cells']} | {hd['n_cells']} | "

@@ -2,25 +2,24 @@
 
 Same RTL (taped-out sources), same yosys flow, two Liberty targets.
 Own-library timing/leakage: measured by our ngspice characterizer; own-library
-areas: REAL (DRC-clean layouts) for INV_X1/X2/X4, NAND2, NOR2 — projected site
-model for the rest. Foundry numbers: official PDK Liberty.
+areas: REAL (DRC-clean layouts) for all cells except the DFF (projected).
+Foundry numbers: official PDK Liberty.
 
 | metric | own library | sky130_fd_sc_hd | ratio own/hd |
 |---|---|---|---|
-| mapped cells | 1691 | 969 | 1.75 |
-| chip area (um^2) | 16481 | 8139 | 2.02 |
-| ABC critical path (ps) | 724 | 3525 | 0.21 |
+| mapped cells | 1783 | 969 | 1.84 |
+| chip area (um^2) | 17686 | 8139 | 2.17 |
+| ABC critical path (ps) | 913 | 3525 | 0.26 |
 | meets 50 MHz (20 ns) | YES | YES | |
 
 ## Cell mix, own library
 
-- NAND2_X1: 581
-- INV_X1: 322
-- NOR2_X1: 304
-- NAND3_X1: 259
+- NAND2_X1: 751
+- NOR2_X1: 580
+- INV_X1: 233
 - DFF_X1: 191
-- BUF_X2: 31
-- BUF_X4: 2
+- BUF_X2: 26
+- BUF_X4: 1
 - INV_X4: 1
 
 ## Cell mix, sky130_fd_sc_hd (top 12)

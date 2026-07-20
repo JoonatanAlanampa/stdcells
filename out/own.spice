@@ -1,0 +1,89 @@
+* own standard-cell library — transistor-level netlists
+* sizing from measured drives (out/sizing.json): L=0.15um, WN_X1=0.65um, WP=1.7um (=2.61x WN)
+* nfet: sky130_fd_pr__nfet_01v8   pfet: sky130_fd_pr__pfet_01v8
+
+.subckt INV_X1 A Y vdd vss
+xm0 Y A vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm1 Y A vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+.ends
+
+.subckt INV_X2 A Y vdd vss
+xm0 Y A vdd vdd sky130_fd_pr__pfet_01v8 w=3.4 l=0.15
+xm1 Y A vss vss sky130_fd_pr__nfet_01v8 w=1.3 l=0.15
+.ends
+
+.subckt INV_X4 A Y vdd vss
+xm0 Y A vdd vdd sky130_fd_pr__pfet_01v8 w=6.8 l=0.15
+xm1 Y A vss vss sky130_fd_pr__nfet_01v8 w=2.6 l=0.15
+.ends
+
+.subckt BUF_X2 A Y vdd vss
+xm0 yb A vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm1 yb A vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+xm2 Y yb vdd vdd sky130_fd_pr__pfet_01v8 w=3.4 l=0.15
+xm3 Y yb vss vss sky130_fd_pr__nfet_01v8 w=1.3 l=0.15
+.ends
+
+.subckt BUF_X4 A Y vdd vss
+xm0 yb A vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm1 yb A vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+xm2 Y yb vdd vdd sky130_fd_pr__pfet_01v8 w=6.8 l=0.15
+xm3 Y yb vss vss sky130_fd_pr__nfet_01v8 w=2.6 l=0.15
+.ends
+
+.subckt NAND2_X1 A B Y vdd vss
+xm0 Y A vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm1 Y B vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm2 Y A m0 vss sky130_fd_pr__nfet_01v8 w=1.3 l=0.15
+xm3 m0 B vss vss sky130_fd_pr__nfet_01v8 w=1.3 l=0.15
+.ends
+
+.subckt NAND3_X1 A B C Y vdd vss
+xm0 Y A vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm1 Y B vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm2 Y C vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm3 Y A m0 vss sky130_fd_pr__nfet_01v8 w=1.95 l=0.15
+xm4 m0 B m1 vss sky130_fd_pr__nfet_01v8 w=1.95 l=0.15
+xm5 m1 C vss vss sky130_fd_pr__nfet_01v8 w=1.95 l=0.15
+.ends
+
+.subckt NOR2_X1 A B Y vdd vss
+xm0 m0 A vdd vdd sky130_fd_pr__pfet_01v8 w=3.4 l=0.15
+xm1 Y B m0 vdd sky130_fd_pr__pfet_01v8 w=3.4 l=0.15
+xm2 Y A vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+xm3 Y B vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+.ends
+
+.subckt NOR3_X1 A B C Y vdd vss
+xm0 m0 A vdd vdd sky130_fd_pr__pfet_01v8 w=5.1 l=0.15
+xm1 m1 B m0 vdd sky130_fd_pr__pfet_01v8 w=5.1 l=0.15
+xm2 Y C m1 vdd sky130_fd_pr__pfet_01v8 w=5.1 l=0.15
+xm3 Y A vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+xm4 Y B vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+xm5 Y C vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+.ends
+
+.subckt DFF_X1 D CLK Q vdd vss
+xm0 cn CLK vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm1 cn CLK vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+xm2 cp cn vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm3 cp cn vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+xm4 D cn m1 vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+xm5 D cp m1 vdd sky130_fd_pr__pfet_01v8 w=1.05 l=0.15
+xm6 m2 m1 vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm7 m2 m1 vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+xm8 mfb m2 vdd vdd sky130_fd_pr__pfet_01v8 w=0.55 l=0.15
+xm9 mfb m2 vss vss sky130_fd_pr__nfet_01v8 w=0.42 l=0.15
+xm10 mfb cp m1 vss sky130_fd_pr__nfet_01v8 w=0.42 l=0.15
+xm11 mfb cn m1 vdd sky130_fd_pr__pfet_01v8 w=0.55 l=0.15
+xm12 m2 cp s1 vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+xm13 m2 cn s1 vdd sky130_fd_pr__pfet_01v8 w=1.05 l=0.15
+xm14 s2 s1 vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm15 s2 s1 vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+xm16 sfb s2 vdd vdd sky130_fd_pr__pfet_01v8 w=0.55 l=0.15
+xm17 sfb s2 vss vss sky130_fd_pr__nfet_01v8 w=0.42 l=0.15
+xm18 sfb cn s1 vss sky130_fd_pr__nfet_01v8 w=0.42 l=0.15
+xm19 sfb cp s1 vdd sky130_fd_pr__pfet_01v8 w=0.55 l=0.15
+xm20 Q s1 vdd vdd sky130_fd_pr__pfet_01v8 w=1.7 l=0.15
+xm21 Q s1 vss vss sky130_fd_pr__nfet_01v8 w=0.65 l=0.15
+.ends

@@ -124,3 +124,11 @@ if __name__ == "__main__":
     for c in LIBRARY:
         print(f"{c.name:9s} {len(c.mos):2d}T  {c.sites} sites  "
               f"{c.area:6.3f} um2  fn={c.function}")
+    # the human-readable W/L record: every transistor of every cell
+    out = Path(__file__).parents[1] / "out" / "own.spice"
+    hdr = (f"* own standard-cell library — transistor-level netlists\n"
+           f"* sizing from measured drives (out/sizing.json): L={L}um, "
+           f"WN_X1={WN}um, WP={WP}um (={SIZING['WP_over_WN']}x WN)\n"
+           f"* nfet: {NMOD}   pfet: {PMOD}\n\n")
+    out.write_text(hdr + "\n\n".join(c.spice() for c in LIBRARY) + "\n")
+    print(f"\nwrote {out}")

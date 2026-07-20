@@ -22,6 +22,31 @@ that went to fabrication (TTSKY26c, commit b646d057).
 5. *(next phases)* Cell layouts (gdstk) → DRC/LVS → LEF → OpenROAD
    hardening in CI → TinyTapeout.
 
+## Results so far — CORDIC-1 synthesis PPA (phase 4)
+
+Same taped-out RTL, same yosys+ABC flow, two Liberty targets:
+
+| metric | **own library** | sky130_fd_sc_hd | ratio own/hd |
+|---|---|---|---|
+| mapped cells | 1796 | 969 | 1.85 |
+| chip area (µm², own = projected) | 15 446 | 8 139 | **1.90** |
+| ABC critical path (ps) | **773** | 3 525 | **0.22** |
+| meets the tapeout's 50 MHz | YES | YES | — |
+
+The measured library is **fast, fat and leaky — by design**: svt PMOS
+(1.37× hvt drive, measured) sized at the measured 2.61 ratio makes every
+gate a strong driver (~4× shorter critical path pre-wires) at 1.9× area
+and ~200× worse PMOS-off leakage (785 pW vs 3.5 pW, measured). Details and
+cell mix: [`out/REPORT.md`](out/REPORT.md). Every transistor's W/L:
+[`out/own.spice`](out/own.spice) / rules in [`out/sizing.json`](out/sizing.json).
+
+**Phase 5 first blood**: `INV_X1` layout
+([`flow/layout.py`](flow/layout.py) → `out/inv_x1.gds`) is **DRC-clean**
+against the official `sky130A_mr.drc` KLayout deck (FEOL+BEOL+offgrid),
+second iteration. Lesson already banked: folded cells need 4 sites, not
+the 3 the pre-layout area model assumed — real areas will be re-measured
+from layouts.
+
 ## Status
 
 - Phase 1–4: this repo, runs natively on Windows (ngspice + yosys from

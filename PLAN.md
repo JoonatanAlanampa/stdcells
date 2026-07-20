@@ -21,11 +21,20 @@ Same CORDIC-1 RTL, same yosys+ABC flow: own lib 1796 cells / 15446 um² /
 773 ps critical path vs hd 969 / 8139 / 3525 ps. Fast, fat, leaky —
 by design. Both meet 50 MHz. See out/REPORT.md.
 
-## Phase 5 — cell LAYOUTS (next)
+## Phase 5 — cell LAYOUTS (STARTED 2026-07-20)
 gdstk-generated GDS per cell on the sky130 hd grid (2.72 um rows, 0.46 um
 sites): nwell/diff/poly/licon/li1/mcon/met1 + nsdm/psdm/npc. KLayout DRC
-(sky130 deck) per cell; KLayout LVS vs the phase-2 netlists. Replaces the
-projected areas with real ones.
+(sky130A_mr.drc) per cell; KLayout LVS vs the phase-2 netlists. Replaces
+the projected areas with real ones.
+- ✅ INV_X1 DRC-CLEAN (feol+beol+offgrid), 2nd iteration. 25 violations →
+  0. Lessons: 3 sites impossible for folded cells (mid column must carry
+  the Y strap; input contact needs its own column — hd's inv_2 is 4 sites
+  for the same reason) → area model needs +1 site for folded cells; licon
+  rows must sit on the 0.005 grid independently of diff centers; poly
+  licon needs 0.19 to any diff (euclidean).
+- TODO: remaining 9 cells (DFF is the boss fight); KLayout LVS device
+  extraction vs own.spice; regenerate areas + re-run phases 3-4 with
+  real numbers.
 
 ## Phase 6 — LEF + OpenROAD hardening in CI
 Abstract LEF from the layouts; GitHub Actions job (ubuntu + LibreLane or

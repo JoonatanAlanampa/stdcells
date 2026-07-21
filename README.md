@@ -80,9 +80,15 @@ CIF read of GDS-only custom cells reports tens of thousands of phantom
 errors on a layout the official KLayout deck proves clean (magic-native
 cell views are future work if this library ever goes on a real shuttle).
 
-Current floorplan (55% target utilization) needs ~22.7k µm² of die —
-bigger than a TinyTapeout 1x1 tile; logic area suggests ~74% utilization
-would be borderline-1x1. Squeezing is the open experiment.
+**And it fits the tile.** With the die pinned to the exact TinyTapeout
+1x1 footprint the fabricated chip used (161.00 × 111.52 µm), the design
+places at **73.6% effective utilization — the fabricated hd version used
+74.0%** — routes, and passes the full signoff deck with 0 violations.
+The one tuning insight: a fast library makes hold *overfixing* expensive
+(default 0.1 ns margin × our 171 ps buffers = 322 repair buffers, 27% of
+logic area, placement infeasible); trimming the resizer hold margins to
+0.02 ns cut that to 69 buffers and the design dropped straight onto the
+tile (final hold slack +0.025 ns, setup +12.9 ns, worst corners).
 
 **Sequential cells — a documented hybrid decision**: the transmission-gate
 DFF needs split-poly columns whose lower gate contact has no legal landing

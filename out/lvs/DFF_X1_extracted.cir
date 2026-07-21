@@ -1,4 +1,4 @@
-* Extracted by KLayout with SKY130 LVS runset on : 21/07/2026 15:20
+* Extracted by KLayout with SKY130 LVS runset on : 21/07/2026 15:24
 
 .SUBCKT DFF_X1 12 13 9 1 15 14 18
 M$1 14 13 4 15 sky130_fd_pr__pfet_01v8 L=0.15 W=0.42 AS=0.1092 AD=0.05775

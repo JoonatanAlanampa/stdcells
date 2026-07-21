@@ -22,7 +22,7 @@ library (own_sky130) {
     cell_leakage_power : 0.003462;
     pin (A) { direction : input; capacitance : 0.002143; }
     pin (Y) { direction : output; function : "(!A)";
-      max_capacitance : 0.100;
+      max_capacitance : 0.100; max_transition : 1.500;
       timing () { related_pin : "A";
         timing_sense : negative_unate;
         cell_rise (tbl33) {
@@ -60,7 +60,7 @@ library (own_sky130) {
     cell_leakage_power : 0.006924;
     pin (A) { direction : input; capacitance : 0.004285; }
     pin (Y) { direction : output; function : "(!A)";
-      max_capacitance : 0.100;
+      max_capacitance : 0.100; max_transition : 1.500;
       timing () { related_pin : "A";
         timing_sense : negative_unate;
         cell_rise (tbl33) {
@@ -98,7 +98,7 @@ library (own_sky130) {
     cell_leakage_power : 0.013847;
     pin (A) { direction : input; capacitance : 0.008571; }
     pin (Y) { direction : output; function : "(!A)";
-      max_capacitance : 0.100;
+      max_capacitance : 0.100; max_transition : 1.500;
       timing () { related_pin : "A";
         timing_sense : negative_unate;
         cell_rise (tbl33) {
@@ -136,7 +136,7 @@ library (own_sky130) {
     cell_leakage_power : 0.511128;
     pin (A) { direction : input; capacitance : 0.002142; }
     pin (Y) { direction : output; function : "A";
-      max_capacitance : 0.100;
+      max_capacitance : 0.100; max_transition : 1.500;
       timing () { related_pin : "A";
         timing_sense : positive_unate;
         cell_rise (tbl33) {
@@ -174,7 +174,7 @@ library (own_sky130) {
     cell_leakage_power : 1.018795;
     pin (A) { direction : input; capacitance : 0.002143; }
     pin (Y) { direction : output; function : "A";
-      max_capacitance : 0.100;
+      max_capacitance : 0.100; max_transition : 1.500;
       timing () { related_pin : "A";
         timing_sense : positive_unate;
         cell_rise (tbl33) {
@@ -212,7 +212,7 @@ library (own_sky130) {
     cell_leakage_power : 2.034126;
     pin (A) { direction : input; capacitance : 0.002142; }
     pin (Y) { direction : output; function : "A";
-      max_capacitance : 0.100;
+      max_capacitance : 0.100; max_transition : 1.500;
       timing () { related_pin : "A";
         timing_sense : positive_unate;
         cell_rise (tbl33) {
@@ -251,7 +251,7 @@ library (own_sky130) {
     pin (A) { direction : input; capacitance : 0.002142; }
     pin (B) { direction : input; capacitance : 0.002108; }
     pin (Y) { direction : output; function : "(!(A&B))";
-      max_capacitance : 0.100;
+      max_capacitance : 0.100; max_transition : 1.500;
       timing () { related_pin : "A";
         timing_sense : negative_unate;
         cell_rise (tbl33) {
@@ -320,7 +320,7 @@ library (own_sky130) {
     pin (A) { direction : input; capacitance : 0.002122; }
     pin (B) { direction : input; capacitance : 0.002142; }
     pin (Y) { direction : output; function : "(!(A|B))";
-      max_capacitance : 0.100;
+      max_capacitance : 0.100; max_transition : 1.500;
       timing () { related_pin : "A";
         timing_sense : negative_unate;
         cell_rise (tbl33) {
@@ -397,7 +397,7 @@ library (own_sky130) {
         rise_constraint (scalar) { values("0.0"); }
         fall_constraint (scalar) { values("0.0"); } } }
     pin (Q) { direction : output; function : "IQ";
-      max_capacitance : 0.100;
+      max_capacitance : 0.100; max_transition : 1.500;
       timing () { related_pin : "CLK"; timing_type : rising_edge;
         cell_rise (tbl33) {
           index_1("0.050, 0.300, 1.500");

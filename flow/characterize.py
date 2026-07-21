@@ -249,7 +249,7 @@ for cell, caps, leak, data in lib_cells:
         rise_constraint (scalar) {{ values("0.0"); }}
         fall_constraint (scalar) {{ values("0.0"); }} }} }}
     pin (Q) {{ direction : output; function : "IQ";
-      max_capacitance : {LOADS[-1]*1e12:.3f};
+      max_capacitance : {LOADS[-1]*1e12:.3f}; max_transition : {SLEWS[-1]*1e9:.3f};
       timing () {{ related_pin : "CLK"; timing_type : rising_edge;
 {table("cell_rise", data["clkq"]["tcqr"])}
 {table("rise_transition", data["clkq"]["trq1"])}
@@ -261,7 +261,7 @@ for cell, caps, leak, data in lib_cells:
                      f"capacitance : {caps[p]*1e12:.6f}; }}")
         L.append(f"    pin ({cell.output}) {{ direction : output; "
                  f"function : \"{cell.function}\";")
-        L.append(f"      max_capacitance : {LOADS[-1]*1e12:.3f};")
+        L.append(f"      max_capacitance : {LOADS[-1]*1e12:.3f}; max_transition : {SLEWS[-1]*1e9:.3f};")
         for p in cell.inputs:
             a = data[p]
             inverting = cell.function.startswith("(!")

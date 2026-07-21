@@ -287,7 +287,8 @@ def buf_x1(lib, name):
     rect(POLY, 0.395, POLY_Y[0], 0.545, POLY_Y[1])              # gate A
     rect(POLY, 0.135, HOOK_Y[0], 0.395, HOOK_Y[1])
     rect(POLY, 0.87, POLY_Y[0], 1.02, POLY_Y[1])                # gate yb
-    rect(POLY, 0.755, HOOK_Y[0], 0.87, HOOK_Y[1])
+    rect(POLY, 0.755, HOOK_Y[0], 1.055, HOOK_Y[1])  # right
+    # enc 0.08 over the yb licon: magic licon.8 wants 0.05+
     rect(LICON, 0.185, PADCUT_Y[0], 0.355, PADCUT_Y[1])         # A licon
     rect(LICON, 0.805, PADCUT_Y[0], 0.975, PADCUT_Y[1])         # yb licon
     licons(rect, 0.26, [(0.36, 0.53), (1.875, 2.045), (2.215, 2.385)])

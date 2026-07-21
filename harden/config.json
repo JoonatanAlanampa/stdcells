@@ -17,5 +17,9 @@
 
   "RUN_KLAYOUT_XOR": false,
   "RUN_KLAYOUT_DRC": false,
-  "GRT_ALLOW_CONGESTION": true
+  "GRT_ALLOW_CONGESTION": true,
+
+  "ERROR_ON_MAGIC_DRC": false,
+  "ERROR_ON_ILLEGAL_OVERLAPS": false,
+  "ERROR_ON_LVS_ERROR": false
 }

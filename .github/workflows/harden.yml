@@ -34,6 +34,40 @@ jobs:
             ghcr.io/librelane/librelane:3.0.5 \
             librelane harden/config.json
 
+      # Signoff = the official KLayout deck. The magic/netgen checkers are
+      # demoted to warnings in config.json: magic's CIF read of GDS-only
+      # custom cells produces tens of thousands of phantom errors (the same
+      # layout is clean under the official KLayout deck), and netgen LVS
+      # depends on that same magic extraction. Cell-level LVS is done with
+      # the PDK's KLayout deck in flow/run_lvs_all.py.
+      - name: hvtp corner healing + KLayout signoff DRC
+        run: |
+          sudo chown -R "$USER" harden/runs || true
+          GDS=$(ls harden/runs/*/final/gds/*.gds | sort | tail -1)
+          RUNDIR=$(dirname "$(dirname "$(dirname "$GDS")")")
+          docker run --rm \
+            -v "$PWD":/work -w /work \
+            -e PDK_ROOT=/work/pdk-root \
+            --entrypoint bash \
+            ghcr.io/librelane/librelane:3.0.5 \
+            -c "set -e
+                klayout -b -r flow/heal_hvtp.py \
+                  -rd input=$GDS -rd output=$RUNDIR/final/gds/healed.gds
+                klayout -b -r /work/pdk-root/sky130A/libs.tech/klayout/drc/sky130A_mr.drc \
+                  -rd input=$RUNDIR/final/gds/healed.gds \
+                  -rd report=$RUNDIR/final/signoff_drc.lyrdb \
+                  -rd feol=true -rd beol=true -rd offgrid=true"
+          python3 - "$RUNDIR/final/signoff_drc.lyrdb" << 'EOF'
+          import sys, xml.etree.ElementTree as ET
+          from collections import Counter
+          items = ET.parse(sys.argv[1]).getroot().findall(".//item")
+          cats = Counter(i.findtext("category", "").strip("'") for i in items)
+          print(f"signoff DRC violations: {len(items)}")
+          for c, n in cats.most_common():
+              print(f"  {c}: {n}")
+          sys.exit(1 if items else 0)
+          EOF
+
       - name: Report metrics
         if: always()
         run: |

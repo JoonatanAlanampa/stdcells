@@ -62,6 +62,28 @@ v1 by catching a double-width NFET in the BUF cells that DRC could never
 see; in v2 the extractor's multifinger merge is mirrored in the reference
 netlists (`flow/run_lvs_all.py`).
 
+## Hardening result (phase 6, v2)
+
+LibreLane P&R of the hybrid netlist (our 7 cells + hd `dfxtp_1`) at 20 ns:
+**routed with 0 violations — the v1 DRT-0073 pin-access blocker is dead**
+— antenna-clean, and **timing met at every corner** (worst setup slack
++3.46 ns at ss/1.60 V, worst hold +0.11 ns at ff/1.95 V). The final GDS
+passes the **full official KLayout deck (FEOL+BEOL+offgrid) with 0
+violations** after one deterministic post-processing step:
+`flow/heal_hvtp.py` bridges 36 corner-pinches in the foundry cells' hvtp
+implant — an abutment case (hd band ending/starting at the same x in
+mirrored rows) that only arises when hvtp-less custom cells interleave
+with hd cells; the added implant is diamond-shaped, diff-free and
+electrically inert, and the healed GDS is re-checked by the full deck.
+Magic's DRC/LVS are demoted to warnings in `harden/config.json`: magic's
+CIF read of GDS-only custom cells reports tens of thousands of phantom
+errors on a layout the official KLayout deck proves clean (magic-native
+cell views are future work if this library ever goes on a real shuttle).
+
+Current floorplan (55% target utilization) needs ~22.7k µm² of die —
+bigger than a TinyTapeout 1x1 tile; logic area suggests ~74% utilization
+would be borderline-1x1. Squeezing is the open experiment.
+
 **Sequential cells — a documented hybrid decision**: the transmission-gate
 DFF needs split-poly columns whose lower gate contact has no legal landing
 zone in this cell template (the same class of geometric dead-end that

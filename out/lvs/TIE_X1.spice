@@ -1,0 +1,4 @@
+.subckt TIE_X1 HI LO VPWR VGND VNB
+M0 HI LO VPWR nwell_i sky130_fd_pr__pfet_01v8 L=0.15u W=1.0u
+M1 LO HI VGND VNB sky130_fd_pr__nfet_01v8 L=0.15u W=0.65u
+.ends

@@ -13,7 +13,8 @@ KLAYOUT = Path.home() / "AppData" / "Roaming" / "KLayout" / "klayout_app.exe"
 DECK = PDK / "libs.tech" / "klayout" / "drc" / "sky130A_mr.drc"
 
 CELLS = ["INV_X1", "INV_X2", "INV_X4", "BUF_X1", "BUF_X2", "BUF_X4",
-         "NAND2_X1", "NOR2_X1", "DFF_X1"]
+         "NAND2_X1", "NOR2_X1", "DFF_X1", "TIE_X1", "WELLTAP_X1",
+         "DIODE_X1", "FILL_X1", "FILL_X2", "FILL_X4", "FILL_X8"]
 
 fails = {}
 for name in sys.argv[1:] or CELLS:

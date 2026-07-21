@@ -408,6 +408,129 @@ def buf_x4(lib, name):
     return W
 
 
+TAP = (65, 44)
+AREAID_DIODE = (81, 23)
+
+
+def phys_frame(cell, rect, W, implant_bands=True):
+    """Frame for the physical cells: like frame() but no npc band, and
+    implant bands optional (the welltap inverts them)."""
+    rect(BND, 0, 0, W, H)
+    rect(AREAID_SC, 0, 0, W, H)
+    rect(LI, 0, -0.085, W, 0.085)
+    rect(LI, 0, H - 0.085, W, H + 0.085)
+    rect(MET1, 0, -RAIL_W / 2, W, RAIL_W / 2)
+    rect(MET1, 0, H - RAIL_W / 2, W, H + RAIL_W / 2)
+    x = 0.23
+    while x < W:
+        rect(MCON, x - 0.085, -0.085, x + 0.085, 0.085)
+        rect(MCON, x - 0.085, H - 0.085, x + 0.085, H + 0.085)
+        x += SITE
+    if implant_bands:
+        rect(NSDM, 0, -0.19, W, 1.015)
+        rect(PSDM, 0, 1.355, W, H + 0.19)
+    rect(NWELL, -0.19, 1.305, W + 0.19, H + 0.19)
+    cell.add(gdstk.Label("VPWR", (0.23, H), layer=MET1LBL[0],
+                         texttype=MET1LBL[1]))
+    cell.add(gdstk.Label("VGND", (0.23, 0), layer=MET1LBL[0],
+                         texttype=MET1LBL[1]))
+
+
+def welltap(lib, name):
+    """1-site well tap (from hd tapvpwrvgnd_1, hvtp dropped): substrate
+    p+ tap to VGND, nwell n+ tap to VPWR — implants INVERTED relative to
+    transistor cells (nsdm over the nwell tap, psdm over the substrate
+    tap)."""
+    cell = gdstk.Cell(name)
+    rect = _mk(cell)
+    W = SITE
+    phys_frame(cell, rect, W, implant_bands=False)
+    rect(NSDM, 0, -0.19, W, 0.19)
+    rect(NSDM, 0, 1.395, W, 2.53)
+    rect(PSDM, 0, 0.19, W, 0.975)
+    rect(PSDM, 0, 2.53, W, H + 0.19)
+    rect(TAP, 0.145, 0.32, 0.315, 0.845)        # substrate tap (p+)
+    rect(TAP, 0.145, 1.525, 0.315, 2.4)         # nwell tap (n+)
+    rect(LICON, 0.145, 0.555, 0.315, 0.725)
+    rect(LICON, 0.145, 1.7, 0.315, 1.87)
+    rect(LICON, 0.145, 2.05, 0.315, 2.22)
+    rect(LI, 0.085, 0, 0.375, 0.81)             # tap -> VGND rail
+    rect(LI, 0.085, 1.47, 0.375, 2.72)          # tap -> VPWR rail
+    lib.add(cell)
+    return W
+
+
+def fill(lib, name, sites):
+    """Filler: rails, wells and implant-band continuity, nothing else."""
+    cell = gdstk.Cell(name)
+    rect = _mk(cell)
+    W = sites * SITE
+    phys_frame(cell, rect, W)
+    lib.add(cell)
+    return W
+
+
+def diode(lib, name):
+    """2-site antenna diode (from hd diode_2, hvtp dropped): n+ diff
+    plate to substrate, big li landing pad = the DIODE pin."""
+    cell = gdstk.Cell(name)
+    rect = _mk(cell)
+    W = 2 * SITE
+    phys_frame(cell, rect, W)
+    rect(DIFF, 0.155, 0.195, 0.785, 0.885)
+    rect(AREAID_DIODE, 0.155, 0.195, 0.785, 0.885)
+    for x in (0.2, 0.575):
+        rect(LICON, x, 0.285, x + 0.17, 0.455)
+        rect(LICON, x, 0.625, x + 0.17, 0.795)
+    rect(LI, 0.085, 0.255, 0.835, 2.465)
+    pin(cell, rect, "DIODE", 0.46)
+    lib.add(cell)
+    return W
+
+
+def tie(lib, name):
+    """TIE_X1: cross-coupled 2T tie cell (pfet gate <- LO, nfet gate <-
+    HI: one stable state, no gate tied straight to a rail, no DC path —
+    the standard alternative to hd conb_1's poly-resistor trick, which
+    needs a special resistor layer and precheck waiver labels).
+    Routing: HI runs in a band ABOVE the pad level (over the pdiff
+    edge), LO in a band BELOW it (over the ndiff edge); the shared
+    source column's VPWR contact escapes on met1 because the HI band
+    crosses its li path — all proven v2 motifs."""
+    cell = gdstk.Cell(name)
+    rect = _mk(cell)
+    W = 3 * SITE
+    frame(cell, rect, W)
+    rect(DIFF, 0.155, *_y(NDIFF_Y, 0.825))              # nfet: D-G-S
+    rect(DIFF, 0.575, *_y(PDIFF_Y, 1.255))              # pfet: S-G-D
+    rect(POLY, 0.415, 0.105, 0.565, 1.325)              # nfet gate (HI)
+    rect(POLY, 0.105, HOOK_Y[0], 0.415, HOOK_Y[1])
+    rect(POLY, 0.845, 0.995, 0.995, POLY_Y[1])          # pfet gate (LO)
+    rect(POLY, 0.985, HOOK_Y[0], 1.275, HOOK_Y[1])
+    rect(LICON, 0.18, PADCUT_Y[0], 0.35, PADCUT_Y[1])   # HI pad licon
+    rect(LICON, 1.045, PADCUT_Y[0], 1.215, PADCUT_Y[1])  # LO pad licon
+    licons(rect, 0.28, NROWS)                           # nfet drain (LO)
+    licons(rect, 0.70, [NROWS[0]])                      # nfet src (VGND)
+    licons(rect, 0.70, [PROWS[1]])                      # pfet src (VPWR)
+    licons(rect, 1.13, PROWS)                           # pfet drain (HI)
+    rect(LI, 0.615, 0, 0.785, 0.55)                     # VGND stub
+    rect(LI, 0.615, 1.835, 0.785, 2.165)                # VPWR patch...
+    rect(MCON, 0.615, 1.915, 0.785, 2.085)              # ...met1 escape
+    rect(MET1, 0.555, 1.855, 0.845, H + 0.24)
+    rect(LI, 0.095, 1.075, 0.435, 1.245)                # HI pad patch
+    rect(LI, 0.18, 1.075, 0.35, 1.585)                  # HI riser
+    rect(LI, 0.18, 1.415, 1.215, 1.585)                 # HI band
+    rect(LI, 0.965, 1.495, 1.295, 2.465)                # HI drain li
+    rect(LI, 0.96, 1.075, 1.30, 1.245)                  # LO pad patch
+    rect(LI, 1.045, 0.72, 1.215, 1.245)                 # LO riser
+    rect(LI, 0.195, 0.72, 1.215, 0.89)                  # LO band
+    rect(LI, 0.115, 0.255, 0.445, 0.905)                # LO drain li
+    pin(cell, rect, "HI", 0.265)
+    pin(cell, rect, "LO", 1.105)
+    lib.add(cell)
+    return W
+
+
 GENERATORS = {
     "INV_X1": inv_x1,
     "INV_X2": lambda l, n: inv_multi(l, n, 2),
@@ -417,6 +540,13 @@ GENERATORS = {
     "BUF_X1": buf_x1,
     "BUF_X2": buf_x2,
     "BUF_X4": buf_x4,
+    "TIE_X1": tie,
+    "WELLTAP_X1": welltap,
+    "DIODE_X1": diode,
+    "FILL_X1": lambda l, n: fill(l, n, 1),
+    "FILL_X2": lambda l, n: fill(l, n, 2),
+    "FILL_X4": lambda l, n: fill(l, n, 4),
+    "FILL_X8": lambda l, n: fill(l, n, 8),
 }
 
 if __name__ == "__main__":

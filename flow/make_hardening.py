@@ -25,8 +25,25 @@ HARDEN.mkdir(exist_ok=True)
 # abc gets a COMBINATIONAL-ONLY copy: handing it a liberty with a flop
 # trips 'merged SCL conversion failed' and the mapper starts emitting
 # raw $_XOR_/$_XNOR_ cells (measured — 100 unmapped gates).
+PHYS_CELLS = """
+  cell (TIE_X1) { area : 3.7536; cell_leakage_power : 0.001;
+    pin (HI) { direction : output; function : "1";
+      max_capacitance : 0.100; }
+    pin (LO) { direction : output; function : "0";
+      max_capacitance : 0.100; } }
+  cell (WELLTAP_X1) { area : 1.2512; cell_leakage_power : 0; }
+  cell (DIODE_X1) { area : 2.5024; cell_leakage_power : 0;
+    pin (DIODE) { direction : input; capacitance : 0.001; } }
+  cell (FILL_X1) { area : 1.2512; cell_leakage_power : 0; }
+  cell (FILL_X2) { area : 2.5024; cell_leakage_power : 0; }
+  cell (FILL_X4) { area : 5.0048; cell_leakage_power : 0; }
+  cell (FILL_X8) { area : 10.0096; cell_leakage_power : 0; }
+"""
 lib = (OUT / "own.lib").read_text()
-(OUT / "own_hardening.lib").write_text(lib)
+lib_full = lib.rstrip()
+assert lib_full.endswith("}"), "unexpected liberty tail"
+lib_full = lib_full[:-1] + PHYS_CELLS + "}\n"
+(OUT / "own_hardening.lib").write_text(lib_full)
 comb, n = re.subn(r"\n  cell \(DFF_X1\).*?\n  \}(?=\n)", "", lib, flags=re.S)
 assert n == 1, "DFF_X1 cell block not found"
 (OUT / "own_abc.lib").write_text(comb)
@@ -41,7 +58,7 @@ dfflegalize -cell $_DFF_P_ x
 dfflibmap -liberty "{OUT / 'own_hardening.lib'}"
 abc -liberty "{OUT / 'own_abc.lib'}"
 opt_clean -purge
-hilomap -hicell sky130_fd_sc_hd__conb_1 HI -locell sky130_fd_sc_hd__conb_1 LO
+hilomap -hicell TIE_X1 HI -locell TIE_X1 LO
 insbuf -buf BUF_X2 A Y
 stat
 write_verilog -noattr -nohex -nodec "{HARDEN / 'cordic_gates.v'}"

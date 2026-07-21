@@ -10200,58 +10200,58 @@ module tt_um_joonatanalanampa_cordic(ui_in, uo_out, uio_in, uio_out, uio_oe, ena
     .D(_0008_),
     .Q(sin_s[6])
   );
-  sky130_fd_sc_hd__conb_1 _3344_ (
+  TIE_X1 _3344_ (
     .LO(_1563_)
   );
-  sky130_fd_sc_hd__conb_1 _3345_ (
+  TIE_X1 _3345_ (
     .LO(_1564_)
   );
-  sky130_fd_sc_hd__conb_1 _3346_ (
+  TIE_X1 _3346_ (
     .LO(_1565_)
   );
-  sky130_fd_sc_hd__conb_1 _3347_ (
+  TIE_X1 _3347_ (
     .LO(_1566_)
   );
-  sky130_fd_sc_hd__conb_1 _3348_ (
+  TIE_X1 _3348_ (
     .LO(_1567_)
   );
-  sky130_fd_sc_hd__conb_1 _3349_ (
+  TIE_X1 _3349_ (
     .LO(_1568_)
   );
-  sky130_fd_sc_hd__conb_1 _3350_ (
+  TIE_X1 _3350_ (
     .LO(_1569_)
   );
-  sky130_fd_sc_hd__conb_1 _3351_ (
+  TIE_X1 _3351_ (
     .LO(_1570_)
   );
-  sky130_fd_sc_hd__conb_1 _3352_ (
+  TIE_X1 _3352_ (
     .LO(_1571_)
   );
-  sky130_fd_sc_hd__conb_1 _3353_ (
+  TIE_X1 _3353_ (
     .LO(_1572_)
   );
-  sky130_fd_sc_hd__conb_1 _3354_ (
+  TIE_X1 _3354_ (
     .LO(_1573_)
   );
-  sky130_fd_sc_hd__conb_1 _3355_ (
+  TIE_X1 _3355_ (
     .LO(_1574_)
   );
-  sky130_fd_sc_hd__conb_1 _3356_ (
+  TIE_X1 _3356_ (
     .LO(_1575_)
   );
-  sky130_fd_sc_hd__conb_1 _3357_ (
+  TIE_X1 _3357_ (
     .LO(_1576_)
   );
-  sky130_fd_sc_hd__conb_1 _3358_ (
+  TIE_X1 _3358_ (
     .LO(_1577_)
   );
-  sky130_fd_sc_hd__conb_1 _3359_ (
+  TIE_X1 _3359_ (
     .LO(_1578_)
   );
-  sky130_fd_sc_hd__conb_1 _3360_ (
+  TIE_X1 _3360_ (
     .LO(_1579_)
   );
-  sky130_fd_sc_hd__conb_1 _3361_ (
+  TIE_X1 _3361_ (
     .LO(_1580_)
   );
   BUF_X2 _3362_ (

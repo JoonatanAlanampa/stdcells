@@ -31,5 +31,22 @@
   "TOP_MARGIN_MULT": 1,
   "BOTTOM_MARGIN_MULT": 1,
   "LEFT_MARGIN_MULT": 2,
-  "RIGHT_MARGIN_MULT": 2
+  "RIGHT_MARGIN_MULT": 2,
+  "FP_WELLTAP_CELL": "WELLTAP_X1",
+  "FP_ENDCAP_CELL": "FILL_X1",
+  "FILL_CELL": [
+    "FILL_X*"
+  ],
+  "DECAP_CELL": [
+    "FILL_X*"
+  ],
+  "DIODE_CELL": "DIODE_X1/DIODE",
+  "CTS_CLK_BUFFERS": [
+    "BUF_X2",
+    "BUF_X4"
+  ],
+  "CTS_ROOT_BUFFER": "BUF_X4",
+  "EXTRA_EXCLUDED_CELLS": [
+    "sky130_fd_sc_hd__*"
+  ]
 }

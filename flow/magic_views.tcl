@@ -39,11 +39,11 @@ proc check_cell {name prefix} {
 }
 
 # control: foundry cells standalone
-foreach name {sky130_fd_sc_hd__inv_1 sky130_fd_sc_hd__dfxtp_1} {
+foreach name {sky130_fd_sc_hd__inv_1 sky130_fd_sc_hd__dfxtp_1 sky130_fd_sc_hd__tapvpwrvgnd_1 sky130_fd_sc_hd__fill_1 sky130_fd_sc_hd__diode_2 sky130_fd_sc_hd__conb_1} {
     check_cell $name CONTROL
 }
 
-set cells {INV_X1 INV_X2 INV_X4 BUF_X2 BUF_X4 NAND2_X1 NOR2_X1 DFF_X1}
+set cells {INV_X1 INV_X2 INV_X4 BUF_X1 BUF_X2 BUF_X4 NAND2_X1 NOR2_X1 DFF_X1 TIE_X1 WELLTAP_X1 DIODE_X1 FILL_X1 FILL_X2 FILL_X4 FILL_X8}
 set total 0
 foreach name $cells {
     incr total [check_cell $name OWN]

@@ -428,4 +428,17 @@ library (own_sky130) {
            "0.02817, 0.10952, 0.42575");
         } } }
   }
+
+  cell (TIE_X1) { area : 3.7536; cell_leakage_power : 0.001;
+    pin (HI) { direction : output; function : "1";
+      max_capacitance : 0.100; }
+    pin (LO) { direction : output; function : "0";
+      max_capacitance : 0.100; } }
+  cell (WELLTAP_X1) { area : 1.2512; cell_leakage_power : 0; }
+  cell (DIODE_X1) { area : 2.5024; cell_leakage_power : 0;
+    pin (DIODE) { direction : input; capacitance : 0.001; } }
+  cell (FILL_X1) { area : 1.2512; cell_leakage_power : 0; }
+  cell (FILL_X2) { area : 2.5024; cell_leakage_power : 0; }
+  cell (FILL_X4) { area : 5.0048; cell_leakage_power : 0; }
+  cell (FILL_X8) { area : 10.0096; cell_leakage_power : 0; }
 }

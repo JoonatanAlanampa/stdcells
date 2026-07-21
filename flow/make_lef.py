@@ -19,7 +19,12 @@ MET1LBL = (68, 5)
 BND = (235, 4)
 
 CELLS = ["INV_X1", "INV_X2", "INV_X4", "BUF_X1", "BUF_X2", "BUF_X4",
-         "NAND2_X1", "NOR2_X1", "DFF_X1"]
+         "NAND2_X1", "NOR2_X1", "DFF_X1", "TIE_X1", "WELLTAP_X1",
+         "DIODE_X1", "FILL_X1", "FILL_X2", "FILL_X4", "FILL_X8"]
+LEF_CLASS = {"WELLTAP_X1": "CORE WELLTAP", "DIODE_X1": "CORE ANTENNACELL",
+             "FILL_X1": "CORE SPACER", "FILL_X2": "CORE SPACER",
+             "FILL_X4": "CORE SPACER", "FILL_X8": "CORE SPACER"}
+OUTPUT_PINS = ("Y", "Q", "HI", "LO")
 
 
 def polys_on(cell, layer):
@@ -105,7 +110,7 @@ for name in CELLS:
     obs_m1 = gdstk.boolean(m1_polys, pin_polys + rail_polys, "not")
 
     lef.append(f"MACRO {name}")
-    lef.append("  CLASS CORE ;")
+    lef.append(f"  CLASS {LEF_CLASS.get(name, 'CORE')} ;")
     lef.append("  ORIGIN 0 0 ;")
     lef.append(f"  SIZE {W:.3f} BY {H:.3f} ;")
     lef.append("  SYMMETRY X Y ;")
@@ -114,10 +119,12 @@ for name in CELLS:
         if poly is None:
             raise SystemExit(f"{name}: no polygon under label {pname}")
         use = "SIGNAL"
-        d = "INPUT" if pname not in ("Y", "Q") else "OUTPUT"
+        d = "OUTPUT" if pname in OUTPUT_PINS else "INPUT"
         lef.append(f"  PIN {pname}")
         lef.append(f"    DIRECTION {d} ;")
         lef.append(f"    USE {use} ;")
+        if name == "DIODE_X1" and pname == "DIODE":
+            lef.append("    ANTENNADIFFAREA 0.4347 ;")
         lef.append("    PORT")
         lef.append(f"      LAYER {layer} ;")
         for x0, y0, x1, y1 in rects(poly):

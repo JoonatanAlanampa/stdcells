@@ -36,7 +36,14 @@ _eq = ('same_device_classes("sky130_fd_pr__nfet_01v8", '
 DECK.write_text(_txt.replace("#=== COMPARE ===", _eq + "#=== COMPARE ==="))
 
 CELLS = ["INV_X1", "INV_X2", "INV_X4", "BUF_X1", "BUF_X2", "BUF_X4",
-         "NAND2_X1", "NOR2_X1", "DFF_X1"]
+         "NAND2_X1", "NOR2_X1", "DFF_X1", "TIE_X1"]
+
+# TIE_X1 is not in cells.py (no inputs, two outputs) — reference here.
+TIE_REF = """.subckt TIE_X1 HI LO VPWR VGND VNB
+M0 HI LO VPWR nwell_i sky130_fd_pr__pfet_01v8 L=0.15u W=1.0u
+M1 LO HI VGND VNB sky130_fd_pr__nfet_01v8 L=0.15u W=0.65u
+.ends
+"""
 
 
 def lvs_netlist(cell):
@@ -77,9 +84,12 @@ def lvs_netlist(cell):
 
 results = {}
 for name in CELLS:
-    cell = next(c for c in LIBRARY if c.name == name)
     ref = LVS_DIR / f"{name}.spice"
-    ref.write_text(lvs_netlist(cell))
+    if name == "TIE_X1":
+        ref.write_text(TIE_REF)
+    else:
+        cell = next(c for c in LIBRARY if c.name == name)
+        ref.write_text(lvs_netlist(cell))
     gds = OUT / f"{name.lower()}.gds"
     cmd = [str(KLAYOUT), "-b", "-r", str(DECK),
            "-rd", f"input={gds}",

@@ -57,8 +57,8 @@ jobs:
                 test -n \"\$DECK\" || { echo 'sky130A_mr.drc not in PDK'; exit 1; }
                 echo \"deck: \$DECK\"
                 klayout -b -r \"\$DECK\" \
-                  -rd input=$RUNDIR/final/gds/healed.gds \
-                  -rd report=$RUNDIR/final/signoff_drc.lyrdb \
+                  -rd input=/work/$RUNDIR/final/gds/healed.gds \
+                  -rd report=/work/$RUNDIR/final/signoff_drc.lyrdb \
                   -rd feol=true -rd beol=true -rd offgrid=true"
           python3 - "$RUNDIR/final/signoff_drc.lyrdb" << 'EOF'
           import sys, xml.etree.ElementTree as ET

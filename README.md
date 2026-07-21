@@ -80,15 +80,50 @@ CIF read of GDS-only custom cells reports tens of thousands of phantom
 errors on a layout the official KLayout deck proves clean (magic-native
 cell views are future work if this library ever goes on a real shuttle).
 
-**And it fits the tile.** With the die pinned to the exact TinyTapeout
-1x1 footprint the fabricated chip used (161.00 × 111.52 µm), the design
-places at **73.6% effective utilization — the fabricated hd version used
-74.0%** — routes, and passes the full signoff deck with 0 violations.
-The one tuning insight: a fast library makes hold *overfixing* expensive
-(default 0.1 ns margin × our 171 ps buffers = 322 repair buffers, 27% of
-logic area, placement infeasible); trimming the resizer hold margins to
-0.02 ns cut that to 69 buffers and the design dropped straight onto the
-tile (final hold slack +0.025 ns, setup +12.9 ns, worst corners).
+**And it fits the tile — with every sequential and logic cell our own.**
+With the die pinned to the exact TinyTapeout 1x1 footprint the
+fabricated chip used (161.00 × 111.52 µm), the all-own netlist (1787 own
+cells incl. 191 DFF_X1; only the 18 tie cells remain foundry) places,
+routes, and passes the full signoff deck with 0 violations — final hold
+slack +0.006 ns and setup +12.3 ns at the worst corners, 87% utilization.
+
+Hard-won tuning lessons along the way: (1) a fast library makes hold
+*overfixing* expensive — the default 0.1 ns resizer margin × our 171 ps
+buffers meant hundreds of repair buffers; trim to ~0.005–0.02 ns.
+(2) Our DFF_X1 is ~150 ps faster at clk→Q than the foundry flop, which
+shortens every min-path and roughly quadruples hold repair — a fast flop
+is not free. (3) The decisive lever was none of that: LibreLane's
+default core margins (4/4/12/12 site-multiples) quietly spend 25% of a
+1x1 tile; at 1/1/2/2 the core grows 13.5k → 16.9k µm². (4) A weak
+"hold buffer" cell (BUF_X1, now in the library) does NOT win OpenROAD's
+hold-buffer selection: the delay/area metric is evaluated at light load,
+where a weak output stage has no delay advantage.
+
+## Magic-native views
+
+`flow/magic_views.tcl` + the `magic-views` CI workflow load the signoff
+GDS into magic (LibreLane container), emit `.mag`/`.maglef` views, and
+run magic's full per-cell DRC judged against a **foundry control group**:
+hd's own `inv_1`/`dfxtp_1` are checked standalone first, and our cells
+must show no rule category beyond theirs (the tap/latch-up rules every
+tapless cell shows — resolved by tap cells at chip level). Status:
+**PASS**. Getting there took two real fixes: the generated cells needed
+the `areaid.standardc` (81/4) marker (magic relaxes contact-to-gate to
+the 0.05 µm standard-cell rule only inside it), and magic caught a
+genuine 45 nm contact-to-gate violation in BUF_X2 that the KLayout
+deck's rule formulation misses — the two checkers are complementary,
+which is exactly why shuttles run both.
+
+## Custom DFF
+
+`flow/make_dff.py` completes the library: it takes the silicon-proven
+`dfxtp_1` polygons and **drops the hvtp implant layer**, which converts
+every pfet to the svt flavor this library is built on — then the result
+goes through the same signoff as every hand-generated cell: official-deck
+DRC (clean), KLayout LVS against the 24T netlist transcribed in
+`cells.py` (MATCH; the four 'special' pass nfets are normalized by the
+deck itself), our characterizer (clk→Q 351 ps, setup ≈ 0, D pin 1.11 fF),
+our LEF. The hybrid era is over.
 
 **Sequential cells — a documented hybrid decision**: the transmission-gate
 DFF needs split-poly columns whose lower gate contact has no legal landing

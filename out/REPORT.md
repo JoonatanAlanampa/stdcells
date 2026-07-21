@@ -8,7 +8,7 @@ Foundry numbers: official PDK Liberty.
 | metric | own library | sky130_fd_sc_hd | ratio own/hd |
 |---|---|---|---|
 | mapped cells | 1782 | 969 | 1.84 |
-| chip area (um^2) | 8865 | 8139 | 1.09 |
+| chip area (um^2) | 9821 | 8139 | 1.21 |
 | ABC critical path (ps) | 919 | 3525 | 0.26 |
 | meets 50 MHz (20 ns) | YES | YES | |
 

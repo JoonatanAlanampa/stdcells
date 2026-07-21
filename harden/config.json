@@ -1,26 +1,30 @@
 {
   "DESIGN_NAME": "tt_um_joonatanalanampa_cordic",
-  "VERILOG_FILES": ["dir::cordic_gates.v"],
+  "VERILOG_FILES": [
+    "dir::cordic_gates.v"
+  ],
   "SYNTH_ELABORATE_ONLY": true,
   "RUN_LINTER": false,
   "ERROR_ON_NL_ASSIGN_STATEMENTS": false,
   "CLOCK_PORT": "clk",
   "CLOCK_PERIOD": 20,
-
-  "EXTRA_LIBS": ["dir::../out/own_hardening.lib"],
-  "EXTRA_LEFS": ["dir::../out/own.lef"],
-  "EXTRA_GDS_FILES": ["dir::../out/own_cells.gds"],
-
+  "EXTRA_LIBS": [
+    "dir::../out/own_hardening.lib"
+  ],
+  "EXTRA_LEFS": [
+    "dir::../out/own.lef"
+  ],
+  "EXTRA_GDS_FILES": [
+    "dir::../out/own_cells.gds"
+  ],
   "FP_SIZING": "absolute",
   "DIE_AREA": "0 0 161.00 111.52",
-  "PL_TARGET_DENSITY_PCT": 88,
-  "PL_RESIZER_HOLD_SLACK_MARGIN": 0.02,
-  "GRT_RESIZER_HOLD_SLACK_MARGIN": 0.02,
-
+  "PL_TARGET_DENSITY_PCT": 91,
+  "PL_RESIZER_HOLD_SLACK_MARGIN": 0.005,
+  "GRT_RESIZER_HOLD_SLACK_MARGIN": 0.005,
   "RUN_KLAYOUT_XOR": false,
   "RUN_KLAYOUT_DRC": false,
   "GRT_ALLOW_CONGESTION": true,
-
   "ERROR_ON_MAGIC_DRC": false,
   "ERROR_ON_ILLEGAL_OVERLAPS": false,
   "ERROR_ON_LVS_ERROR": false

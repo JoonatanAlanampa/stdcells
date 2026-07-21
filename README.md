@@ -91,10 +91,16 @@ fabricated chip used (161.00 × 111.52 µm), the all-own netlist (1787 own
 cells incl. 191 DFF_X1; only the 18 tie cells remain foundry) places,
 routes, and passes the full signoff deck with 0 violations — final hold
 slack +0.006 ns and setup +12.3 ns at the worst corners, 87% utilization.
-(Full disclosure: the P&R *flow* still inserts foundry cells of its own —
-clock buffers, hold/delay cells, taps, fills, antenna diodes, ~7k µm²
-of the tile. Replacing those with own equivalents is the identified next
-leg; see the closing note.)
+**Zero-foundry milestone (lib-v1.0):** the flow-inserted cells are now
+ours too — TIE_X1 (cross-coupled 2T tie), WELLTAP_X1, DIODE_X1 (with
+LEF antenna area), FILL_X1–X8, CTS on our buffers, `sky130_fd_sc_hd__*`
+banned from P&R outright. The chip contains **zero foundry cells**:
+signoff DRC 0, hold +0.016 ns / setup +13.4 ns, 65% utilization. The
+decisive architectural fix: **all signal pins moved to met1** (in-cell
+mcon + pad) — after three rounds of DRT-vs-deck li disagreements
+(same-net via pairs, rail-stub proximity), taking li out of the
+router's reach entirely killed the class. The library is consumed by
+downstream chips as pinned release tags (`lib-v1.0`).
 
 Hard-won tuning lessons along the way: (1) a fast library makes hold
 *overfixing* expensive — the default 0.1 ns resizer margin × our 171 ps

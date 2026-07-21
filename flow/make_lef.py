@@ -114,8 +114,24 @@ for name in CELLS:
         for pname in list(pins):
             layer, poly = pins[pname]
             clipped = gdstk.boolean([poly], [band], "and")
-            pins[pname] = (layer, clipped[0])
-    pin_polys = [p for _, p in pins.values() if p is not None]
+            pins[pname] = (layer, clipped)
+    # ALL signal pins: clip the ports away from the rail-adjacent
+    # thirds (y < 0.48 / y > 2.24). Pin-access vias landed there sit
+    # 0.12-0.16 from neighbor rows' power stubs across the boundary -
+    # legal to DRT's abstraction, rejected by the signoff deck (38
+    # residual li.3 in the zero-foundry run). Every pin was designed
+    # mid-band reachable, so the clip costs no access.
+    for pname in list(pins):
+        layer, poly = pins[pname]
+        if poly is None:
+            continue
+        plist = poly if isinstance(poly, list) else [poly]
+        band = gdstk.rectangle((-1, 0.48), (W + 1, 2.24))
+        clipped = gdstk.boolean(plist, [band], "and")
+        if clipped:
+            pins[pname] = (layer, clipped)
+    pin_polys = [q for _, p in pins.values() if p is not None
+                 for q in (p if isinstance(p, list) else [p])]
     rail_polys = [p for p in rails.values() if p is not None]
     obs_li = gdstk.boolean(li_polys, pin_polys, "not")
     obs_m1 = gdstk.boolean(m1_polys, pin_polys + rail_polys, "not")
@@ -138,8 +154,10 @@ for name in CELLS:
             lef.append("    ANTENNADIFFAREA 0.4347 ;")
         lef.append("    PORT")
         lef.append(f"      LAYER {layer} ;")
-        for x0, y0, x1, y1 in rects(poly):
-            lef.append(f"        RECT {x0:.3f} {y0:.3f} {x1:.3f} {y1:.3f} ;")
+        for piece in (poly if isinstance(poly, list) else [poly]):
+            for x0, y0, x1, y1 in rects(piece):
+                lef.append(f"        RECT {x0:.3f} {y0:.3f} "
+                           f"{x1:.3f} {y1:.3f} ;")
         lef.append("    END")
         lef.append(f"  END {pname}")
     for rname, poly in rails.items():

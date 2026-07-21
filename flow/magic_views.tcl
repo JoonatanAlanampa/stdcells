@@ -30,6 +30,9 @@ proc check_cell {name prefix} {
         set out [drc listall why]
         foreach {why boxes} $out {
             puts "$prefix-WHY $name :: $why"
+            foreach b $boxes {
+                puts "$prefix-BOX $name :: $why :: $b"
+            }
         }
     }
     return $n

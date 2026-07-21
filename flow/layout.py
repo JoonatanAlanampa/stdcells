@@ -94,9 +94,26 @@ def licons(rect, xc, rows):
         rect(LICON, xc - 0.085, y0, xc + 0.085, y1)
 
 
-def pin(cell, rect, name, x, y=1.19):
-    rect(LIPIN, x - 0.085, y - 0.085, x + 0.085, y + 0.085)
-    cell.add(gdstk.Label(name, (x, y), layer=LILBL[0], texttype=LILBL[1]))
+def pin(cell, rect, name, x, y=1.19, W=None):
+    """MET1 pin pad: mcon + met1 patch + met1 label. Router never
+    touches li (the entire DRT-vs-deck li.3 disagreement class dies
+    architecturally). Pad x clamps 0.245 from the cell edges so
+    abutted pads keep met1 spacing (0.07+0.07 = 0.14); the mcon must
+    still land on the pin's li — layout.py asserts that after
+    generation."""
+    if W is not None:
+        x = min(max(x, 0.245), W - 0.245)
+    y = min(max(y, 0.53), 2.19)         # pad edge >= 0.14 from rails
+    rect(MCON, x - 0.085, y - 0.085, x + 0.085, y + 0.085)
+    # 0.28 x 0.30: min-area met via height so 0.42-spaced pins keep
+    # the 0.14 met1 spacing between pads (m1.2)
+    rect(MET1, x - 0.14, y - 0.15, x + 0.14, y + 0.15)
+    cell.add(gdstk.Label(name, (x, y), layer=MET1LBL[0],
+                         texttype=MET1LBL[1]))
+    PIN_MCONS.append((cell.name, name, x, y))
+
+
+PIN_MCONS = []
 
 
 def inv_x1(lib, name):
@@ -119,8 +136,8 @@ def inv_x1(lib, name):
     rect(LI, 0.72, 0.255, 1.05, 0.885)                          # Y lower
     rect(LI, 0.82, 0.885, 1.05, 1.485)                          # Y neck
     rect(LI, 0.72, 1.485, 1.05, 2.465)                          # Y upper
-    pin(cell, rect, "A", 0.445)
-    pin(cell, rect, "Y", 0.905)
+    pin(cell, rect, "A", 0.445, W=W)
+    pin(cell, rect, "Y", 0.905, W=W)
     lib.add(cell)
     return W
 
@@ -154,8 +171,8 @@ def inv_multi(lib, name, fingers):
         rect(LI, 0.525, 0.255, 0.855, 0.885)                    # Y
         rect(LI, 0.605, 0.885, 0.855, 1.485)
         rect(LI, 0.525, 1.485, 0.855, 2.465)
-        pin(cell, rect, "A", 0.27)
-        pin(cell, rect, "Y", 0.69)
+        pin(cell, rect, "A", 0.27, W=W)
+        pin(cell, rect, "Y", 0.69, W=W)
     else:                                                       # 4 fingers
         W = 5 * SITE
         rect(DIFF, 0.185, *_y(NDIFF_Y, 2.115))
@@ -184,8 +201,8 @@ def inv_multi(lib, name, fingers):
         rect(LI, 0.565, 1.495, 2.17, 1.665)                     # high bar
         rect(LI, 0.565, 1.495, 0.895, 2.465)                    # Y p-fingers
         rect(LI, 1.405, 1.495, 1.735, 2.465)
-        pin(cell, rect, "A", 0.27)
-        pin(cell, rect, "Y", 2.07)
+        pin(cell, rect, "A", 0.27, W=W)
+        pin(cell, rect, "Y", 2.07, W=W)
     frame(cell, rect, W)
     lib.add(cell)
     return W
@@ -221,9 +238,9 @@ def nand2(lib, name):
     rect(LI, 0.6, 0.255, 1.295, 0.885)                          # Y n-slab
     rect(LI, 0.6, 0.885, 0.77, 1.485)                           # Y neck
     rect(LI, 0.535, 1.485, 0.865, 2.465)                        # Y p-slab
-    pin(cell, rect, "B", 0.225)
-    pin(cell, rect, "A", 1.145)
-    pin(cell, rect, "Y", 0.685)
+    pin(cell, rect, "B", 0.225, W=W)
+    pin(cell, rect, "A", 1.145, W=W)
+    pin(cell, rect, "Y", 0.685, W=W)
     lib.add(cell)
     return W
 
@@ -262,9 +279,9 @@ def nor2(lib, name):
     rect(LI, 0.605, 0.895, 0.775, 1.495)                        # Y neck
     rect(LI, 0.095, 1.495, 0.775, 1.665)                        # Y run left
     rect(LI, 0.095, 1.495, 0.425, 2.45)                         # Y p-riser
-    pin(cell, rect, "B", 0.23)
-    pin(cell, rect, "A", 1.15)
-    pin(cell, rect, "Y", 0.235, 2.21)
+    pin(cell, rect, "B", 0.23, W=W)
+    pin(cell, rect, "A", 1.15, W=W)
+    pin(cell, rect, "Y", 0.235, 2.21, W=W)
     lib.add(cell)
     return W
 
@@ -308,8 +325,8 @@ def buf_x1(lib, name):
     rect(LI, 1.145, 0.825, 1.315, 1.495)     # Y neck's x-overlap with the
     rect(LI, 1.07, 1.495, 1.315, 1.665)      # bars must be >= 0.17)
     rect(LI, 1.07, 1.495, 1.24, 2.465)                          # Y upper
-    pin(cell, rect, "A", 0.23)
-    pin(cell, rect, "Y", 1.23)
+    pin(cell, rect, "A", 0.23, W=W)
+    pin(cell, rect, "Y", 1.23, W=W)
     lib.add(cell)
     return W
 
@@ -354,8 +371,8 @@ def buf_x2(lib, name):
     rect(LI, 1.06, 0.255, 1.315, 0.83)                          # Y lower
     rect(LI, 1.145, 0.83, 1.315, 1.56)                          # Y neck
     rect(LI, 1.06, 1.56, 1.315, 2.465)                          # Y upper
-    pin(cell, rect, "A", 0.23)
-    pin(cell, rect, "Y", 1.23)
+    pin(cell, rect, "A", 0.23, W=W)
+    pin(cell, rect, "Y", 1.23, W=W)
     lib.add(cell)
     return W
 
@@ -403,8 +420,8 @@ def buf_x4(lib, name):
     rect(LI, 1.015, 1.445, 2.025, 1.615)                        # high bar
     rect(LI, 1.015, 1.615, 1.185, 2.465)                        # Y p-fingers
     rect(LI, 1.855, 1.615, 2.025, 2.465)
-    pin(cell, rect, "A", 0.305)
-    pin(cell, rect, "Y", 1.615)
+    pin(cell, rect, "A", 0.305, W=W)
+    pin(cell, rect, "Y", 1.615, W=W)
     lib.add(cell)
     return W
 
@@ -484,7 +501,7 @@ def diode(lib, name):
         rect(LICON, x, 0.285, x + 0.17, 0.455)
         rect(LICON, x, 0.625, x + 0.17, 0.795)
     rect(LI, 0.085, 0.255, 0.835, 2.465)
-    pin(cell, rect, "DIODE", 0.46)
+    pin(cell, rect, "DIODE", 0.46, W=W)
     lib.add(cell)
     return W
 
@@ -531,8 +548,8 @@ def tie(lib, name):
     rect(LI, 0.115, 0.255, 0.445, 0.905)                # LO drain li
     # markers at y=1.16: magic merges the pin datatype into li,
     # and the default-y boxes poke 0.03 above these short patches
-    pin(cell, rect, "HI", 0.265, 1.16)
-    pin(cell, rect, "LO", 1.12, 1.16)
+    pin(cell, rect, "HI", 0.265, 1.16, W=W)
+    pin(cell, rect, "LO", 1.12, 1.16, W=W)
     lib.add(cell)
     return W
 
@@ -567,3 +584,16 @@ if __name__ == "__main__":
         print(f"{name}: W = {w:.2f} um ({w/SITE:.0f} sites), "
               f"area {areas[name]} um2 -> {name.lower()}.gds")
     (outdir / "areas_real.json").write_text(json.dumps(areas, indent=1))
+    # verify every met1-pin mcon lands fully on cell li
+    for cname, pname, x, y in PIN_MCONS:
+        lib2 = gdstk.read_gds(str(outdir / f"{cname.lower()}.gds"))
+        c2 = [c for c in lib2.cells if c.name == cname][0]
+        lis = [pp for pp in c2.polygons
+               if (pp.layer, pp.datatype) == LI]
+        merged2 = gdstk.boolean(lis, [], "or")
+        corners = [(x - 0.085, y - 0.085), (x + 0.085, y - 0.085),
+                   (x - 0.085, y + 0.085), (x + 0.085, y + 0.085)]
+        ok = all(any(gdstk.inside([pt], [pp])[0] for pp in merged2)
+                 for pt in corners)
+        assert ok, f"{cname}.{pname}: pin mcon at ({x},{y}) not on li"
+    print(f"all {len(PIN_MCONS)} pin mcons verified on li")

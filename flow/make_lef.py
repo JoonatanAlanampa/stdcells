@@ -89,17 +89,14 @@ for name in CELLS:
 
     # signal pins: label -> connected polygon on its layer
     pins = {}
-    origins = {}
     for lbl in cell.labels:
         key = (lbl.layer, lbl.texttype)
         if key == LILBL and lbl.text not in ("VPWR", "VGND"):
             poly = find_containing(li_polys, lbl.origin)
             pins[lbl.text] = ("li1", poly)
-            origins[lbl.text] = lbl.origin
         elif key == MET1LBL and lbl.text not in ("VPWR", "VGND"):
             poly = find_containing(m1_polys, lbl.origin)
             pins[lbl.text] = ("met1", poly)
-            origins[lbl.text] = lbl.origin
 
     # rails
     rails = {}
@@ -107,26 +104,32 @@ for name in CELLS:
         if lbl.text in ("VPWR", "VGND"):
             rails[lbl.text] = find_containing(m1_polys, lbl.origin)
 
-    # Port = a small window around the pin LABEL (pad row): guarantees
-    # exactly ONE via site per pin. Wider ports let DRT place same-net
-    # via PAIRS along the port (0.16-0.33 apart - no same-net spacing
-    # in its model; the manufacturing deck has no such exemption), and
-    # rail-adjacent landings that clash with neighbor rows' stubs.
-    # Fallbacks widen only if a label has no metal in the window.
+    # TIE_X1: restrict the pin ports to the pad-patch band. The full
+    # connected HI/LO polygons let the router drop via pairs on adjacent
+    # tracks of the wide bands (li squares 0.16 apart) and vias hemmed
+    # in by neighbor-cell li - all 64 li.3 violations of the first
+    # zero-foundry run. The patch band hosts exactly one met1 track.
+    if name == "TIE_X1":
+        band = gdstk.rectangle((0, 1.06), (W, 1.26))
+        for pname in list(pins):
+            layer, poly = pins[pname]
+            clipped = gdstk.boolean([poly], [band], "and")
+            pins[pname] = (layer, clipped)
+    # ALL signal pins: clip the ports away from the rail-adjacent
+    # thirds (y < 0.48 / y > 2.24). Pin-access vias landed there sit
+    # 0.12-0.16 from neighbor rows' power stubs across the boundary -
+    # legal to DRT's abstraction, rejected by the signoff deck (38
+    # residual li.3 in the zero-foundry run). Every pin was designed
+    # mid-band reachable, so the clip costs no access.
     for pname in list(pins):
         layer, poly = pins[pname]
         if poly is None:
             continue
         plist = poly if isinstance(poly, list) else [poly]
-        ox, oy = origins.get(pname, (W / 2, 1.16))
-        for win in ((ox - 0.25, 1.06, ox + 0.25, 1.26),
-                    (ox - 0.25, oy - 0.10, ox + 0.25, oy + 0.10),
-                    (-1, 0.48, W + 1, 2.24)):
-            band = gdstk.rectangle((win[0], win[1]), (win[2], win[3]))
-            clipped = gdstk.boolean(plist, [band], "and")
-            if clipped:
-                pins[pname] = (layer, clipped)
-                break
+        band = gdstk.rectangle((-1, 0.48), (W + 1, 2.24))
+        clipped = gdstk.boolean(plist, [band], "and")
+        if clipped:
+            pins[pname] = (layer, clipped)
     pin_polys = [q for _, p in pins.values() if p is not None
                  for q in (p if isinstance(p, list) else [p])]
     rail_polys = [p for p in rails.values() if p is not None]

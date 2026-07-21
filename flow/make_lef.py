@@ -104,6 +104,17 @@ for name in CELLS:
         if lbl.text in ("VPWR", "VGND"):
             rails[lbl.text] = find_containing(m1_polys, lbl.origin)
 
+    # TIE_X1: restrict the pin ports to the pad-patch band. The full
+    # connected HI/LO polygons let the router drop via pairs on adjacent
+    # tracks of the wide bands (li squares 0.16 apart) and vias hemmed
+    # in by neighbor-cell li - all 64 li.3 violations of the first
+    # zero-foundry run. The patch band hosts exactly one met1 track.
+    if name == "TIE_X1":
+        band = gdstk.rectangle((0, 1.06), (W, 1.26))
+        for pname in list(pins):
+            layer, poly = pins[pname]
+            clipped = gdstk.boolean([poly], [band], "and")
+            pins[pname] = (layer, clipped[0])
     pin_polys = [p for _, p in pins.values() if p is not None]
     rail_polys = [p for p in rails.values() if p is not None]
     obs_li = gdstk.boolean(li_polys, pin_polys, "not")

@@ -503,33 +503,36 @@ def tie(lib, name):
     W = 3 * SITE
     frame(cell, rect, W)
     rect(DIFF, 0.155, *_y(NDIFF_Y, 0.825))              # nfet: D-G-S
-    rect(DIFF, 0.575, *_y(PDIFF_Y, 1.255))              # pfet: S-G-D
+    rect(DIFF, 0.575, *_y(PDIFF_Y, 1.245))              # pfet: S-G-D
+    # pdiff right margin 0.135: abutting a neighbor diff at its own
+    # 0.135 gives exactly the 0.27 difftap spacing (0.125 measured 0.26
+    # across a TIE|BUF_X2 boundary in the first zero-foundry run)
     rect(POLY, 0.415, 0.105, 0.565, 1.325)              # nfet gate (HI)
     rect(POLY, 0.105, HOOK_Y[0], 0.415, HOOK_Y[1])
-    rect(POLY, 0.845, 0.995, 0.995, POLY_Y[1])          # pfet gate (LO)
-    rect(POLY, 0.985, HOOK_Y[0], 1.275, HOOK_Y[1])
+    rect(POLY, 0.835, 0.995, 0.985, POLY_Y[1])          # pfet gate (LO)
+    rect(POLY, 0.975, HOOK_Y[0], 1.265, HOOK_Y[1])
     rect(LICON, 0.18, PADCUT_Y[0], 0.35, PADCUT_Y[1])   # HI pad licon
-    rect(LICON, 1.045, PADCUT_Y[0], 1.215, PADCUT_Y[1])  # LO pad licon
+    rect(LICON, 1.035, PADCUT_Y[0], 1.205, PADCUT_Y[1])  # LO pad licon
     licons(rect, 0.28, NROWS)                           # nfet drain (LO)
     licons(rect, 0.70, [NROWS[0]])                      # nfet src (VGND)
     licons(rect, 0.70, [PROWS[1]])                      # pfet src (VPWR)
-    licons(rect, 1.13, PROWS)                           # pfet drain (HI)
+    licons(rect, 1.12, PROWS)                           # pfet drain (HI)
     rect(LI, 0.615, 0, 0.785, 0.55)                     # VGND stub
     rect(LI, 0.615, 1.835, 0.785, 2.165)                # VPWR patch...
     rect(MCON, 0.615, 1.915, 0.785, 2.085)              # ...met1 escape
     rect(MET1, 0.555, 1.855, 0.845, H + 0.24)
     rect(LI, 0.095, 1.075, 0.435, 1.245)                # HI pad patch
     rect(LI, 0.18, 1.075, 0.35, 1.585)                  # HI riser
-    rect(LI, 0.18, 1.415, 1.215, 1.585)                 # HI band
-    rect(LI, 0.965, 1.495, 1.295, 2.465)                # HI drain li
-    rect(LI, 0.96, 1.075, 1.30, 1.245)                  # LO pad patch
-    rect(LI, 1.045, 0.72, 1.215, 1.245)                 # LO riser
-    rect(LI, 0.195, 0.72, 1.215, 0.89)                  # LO band
+    rect(LI, 0.18, 1.415, 1.205, 1.585)                 # HI band
+    rect(LI, 0.955, 1.495, 1.285, 2.465)                # HI drain li
+    rect(LI, 0.955, 1.075, 1.285, 1.245)                # LO pad patch
+    rect(LI, 1.035, 0.72, 1.205, 1.245)                 # LO riser
+    rect(LI, 0.195, 0.72, 1.205, 0.89)                  # LO band
     rect(LI, 0.115, 0.255, 0.445, 0.905)                # LO drain li
     # markers at y=1.16: magic merges the pin datatype into li,
     # and the default-y boxes poke 0.03 above these short patches
     pin(cell, rect, "HI", 0.265, 1.16)
-    pin(cell, rect, "LO", 1.105, 1.16)
+    pin(cell, rect, "LO", 1.12, 1.16)
     lib.add(cell)
     return W
 

@@ -38,6 +38,26 @@ jobs:
                 magic -dnull -noconsole -rcfile \"\$MAGICRC\" flow/magic_views.tcl" \
             | tee magic_report.txt
           grep -q "MAGICDRC-TOTAL" magic_report.txt
+          python3 - << 'EOF'
+          # Pass criterion: our cells show no magic rule category that the
+          # foundry control cells (hd inv_1/dfxtp_1, silicon-proven) do not
+          # also show standalone (tap/latch-up rules resolved at chip level).
+          import re, sys
+          control, own = set(), {}
+          for line in open("magic_report.txt"):
+              m = re.match(r"CONTROL-WHY \S+ :: (.+)", line.strip())
+              if m: control.add(m.group(1).strip())
+              m = re.match(r"OWN-WHY (\S+) :: (.+)", line.strip())
+              if m: own.setdefault(m.group(1), set()).add(m.group(2).strip())
+          print("control categories (expected standalone):")
+          for c in sorted(control): print("  -", c)
+          bad = {c: sorted(v - control) for c, v in own.items() if v - control}
+          if bad:
+              print("FAIL - rule categories beyond the foundry control set:")
+              for c, v in bad.items(): print(f"  {c}: {v}")
+              sys.exit(1)
+          print("PASS - all own-cell magic findings match the foundry control set")
+          EOF
 
       - name: Upload views
         if: always()

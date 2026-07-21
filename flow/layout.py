@@ -37,6 +37,11 @@ MCON = (67, 44)
 MET1 = (68, 20)
 MET1LBL = (68, 5)
 BND = (235, 4)
+AREAID_SC = (81, 4)      # areaid.standardc: magic relaxes in-cell rules
+                         # (licon.11 contact-to-gate 0.055 -> 0.05) for
+                         # marked standard-cell regions; hd cells all
+                         # carry it. The KLayout deck reads but never
+                         # uses it, so our KLayout signoff is unchanged.
 
 H = 2.72
 SITE = 0.46
@@ -64,6 +69,7 @@ def _mk(cell):
 def frame(cell, rect, W):
     """Boundary, li+met1 rails, rail mcons, npc band, implants, nwell."""
     rect(BND, 0, 0, W, H)
+    rect(AREAID_SC, 0, 0, W, H)
     rect(LI, 0, -0.085, W, 0.085)
     rect(LI, 0, H - 0.085, W, H + 0.085)
     rect(MET1, 0, -RAIL_W / 2, W, RAIL_W / 2)

@@ -526,8 +526,10 @@ def tie(lib, name):
     rect(LI, 1.045, 0.72, 1.215, 1.245)                 # LO riser
     rect(LI, 0.195, 0.72, 1.215, 0.89)                  # LO band
     rect(LI, 0.115, 0.255, 0.445, 0.905)                # LO drain li
-    pin(cell, rect, "HI", 0.265)
-    pin(cell, rect, "LO", 1.105)
+    # markers at y=1.16: magic merges the pin datatype into li,
+    # and the default-y boxes poke 0.03 above these short patches
+    pin(cell, rect, "HI", 0.265, 1.16)
+    pin(cell, rect, "LO", 1.105, 1.16)
     lib.add(cell)
     return W
 

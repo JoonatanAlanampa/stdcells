@@ -48,5 +48,7 @@
   "CTS_ROOT_BUFFER": "BUF_X4",
   "EXTRA_EXCLUDED_CELLS": [
     "sky130_fd_sc_hd__*"
-  ]
+  ],
+  "CTS_MAX_SLEW": 0.75,
+  "CTS_MAX_CAP": 0.05
 }

@@ -33,6 +33,8 @@ jobs:
             -c "set -e
                 MAGICRC=\$(find /work/pdk-root -name sky130A.magicrc | head -1)
                 test -n \"\$MAGICRC\" || { echo 'no sky130A.magicrc in PDK cache'; exit 1; }
+                export PDK_ROOT=\${MAGICRC%/sky130A/libs.tech/magic/sky130A.magicrc}
+                echo \"PDK_ROOT=\$PDK_ROOT\"
                 magic -dnull -noconsole -rcfile \"\$MAGICRC\" flow/magic_views.tcl" \
             | tee magic_report.txt
           grep -q "MAGICDRC-TOTAL" magic_report.txt

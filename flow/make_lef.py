@@ -126,8 +126,14 @@ for name in CELLS:
         if poly is None:
             continue
         plist = poly if isinstance(poly, list) else [poly]
-        band = gdstk.rectangle((-1, 0.48), (W + 1, 2.24))
+        # one met1 track per pin: the pad row. Wider ports let DRT
+        # place same-net via PAIRS 0.16 apart (no same-net spacing in
+        # its model; the manufacturing deck has no such exemption).
+        band = gdstk.rectangle((-1, 1.06), (W + 1, 1.26))
         clipped = gdstk.boolean(plist, [band], "and")
+        if not clipped:                     # pin has no mid-band metal
+            band = gdstk.rectangle((-1, 0.48), (W + 1, 2.24))
+            clipped = gdstk.boolean(plist, [band], "and")
         if clipped:
             pins[pname] = (layer, clipped)
     pin_polys = [q for _, p in pins.values() if p is not None

@@ -35,7 +35,7 @@ _eq = ('same_device_classes("sky130_fd_pr__nfet_01v8", '
        '"SKY130_FD_PR__PFET_01V8")\n')
 DECK.write_text(_txt.replace("#=== COMPARE ===", _eq + "#=== COMPARE ==="))
 
-CELLS = ["INV_X1", "INV_X2", "INV_X4", "BUF_X2", "BUF_X4",
+CELLS = ["INV_X1", "INV_X2", "INV_X4", "BUF_X1", "BUF_X2", "BUF_X4",
          "NAND2_X1", "NOR2_X1", "DFF_X1"]
 
 

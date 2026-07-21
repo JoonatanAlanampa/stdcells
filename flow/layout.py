@@ -269,6 +269,50 @@ def nor2(lib, name):
     return W
 
 
+def buf_x1(lib, name):
+    """BUF_X1: minimum buffer — one finger per stage, 4 sites. Purpose:
+    the HOLD-FIX cell. OpenROAD's repair_hold picks the buffer with the
+    highest hold-delay/area metric; BUF_X1 (~2x INV_X1's delay in
+    BUF_X2's area) beats BUF_X2 ~2.3x on it, roughly halving the
+    hold-buffer area that killed the all-own-cells 1x1 floorplan.
+    Topology = buf_x2's stage-1 recipe with a single stage-2 finger;
+    the Y bar carries an extended mid-band neck so the pin marker fits
+    with 0.17 to the yb pad patch."""
+    cell = gdstk.Cell(name)
+    rect = _mk(cell)
+    W = 4 * SITE
+    frame(cell, rect, W)
+    rect(DIFF, 0.135, *_y(NDIFF_Y, 1.285))
+    rect(DIFF, 0.135, *_y(PDIFF_Y, 1.285))
+    rect(POLY, 0.395, POLY_Y[0], 0.545, POLY_Y[1])              # gate A
+    rect(POLY, 0.135, HOOK_Y[0], 0.395, HOOK_Y[1])
+    rect(POLY, 0.87, POLY_Y[0], 1.02, POLY_Y[1])                # gate yb
+    rect(POLY, 0.755, HOOK_Y[0], 0.87, HOOK_Y[1])
+    rect(LICON, 0.185, PADCUT_Y[0], 0.355, PADCUT_Y[1])         # A licon
+    rect(LICON, 0.805, PADCUT_Y[0], 0.975, PADCUT_Y[1])         # yb licon
+    licons(rect, 0.26, [(0.36, 0.53), (1.875, 2.045), (2.215, 2.385)])
+    licons(rect, 0.725, [NROWS[0], (1.875, 2.045), (2.215, 2.385)])
+    licons(rect, 1.155, [(0.445, 0.615), (1.73, 1.9), (2.135, 2.305)])
+    rect(LI, 0.085, 0.985, 0.44, 1.355)                         # A patch
+    rect(LI, 0.56, 0.085, 0.89, 0.465)                          # VGND stub
+    rect(LI, 0.56, 1.875, 0.89, 2.635)                          # VPWR stub
+    rect(LI, 0.175, 0.255, 0.345, 0.805)                        # yb n-finger
+    rect(LI, 0.175, 0.635, 0.78, 0.805)                         # yb low arm
+    rect(LI, 0.61, 0.805, 0.78, 1.535)                          # yb riser
+    rect(LI, 0.725, 0.995, 0.975, 1.325)                        # yb pad li
+    rect(LI, 0.175, 1.535, 0.78, 1.705)                         # yb high arm
+    rect(LI, 0.175, 1.535, 0.345, 2.465)                        # yb p-finger
+    rect(LI, 1.07, 0.255, 1.24, 0.825)                          # Y lower
+    rect(LI, 1.07, 0.655, 1.315, 0.825)      # widened throat (li.1: the
+    rect(LI, 1.145, 0.825, 1.315, 1.495)     # Y neck's x-overlap with the
+    rect(LI, 1.07, 1.495, 1.315, 1.665)      # bars must be >= 0.17)
+    rect(LI, 1.07, 1.495, 1.24, 2.465)                          # Y upper
+    pin(cell, rect, "A", 0.23)
+    pin(cell, rect, "Y", 1.23)
+    lib.add(cell)
+    return W
+
+
 def buf_x2(lib, name):
     """Stage 1 (gate A, pad hook left) drives yb: drain fingers at the
     LEFT EDGE column, arms reaching right between the rails' stub rows to
@@ -370,6 +414,7 @@ GENERATORS = {
     "INV_X4": lambda l, n: inv_multi(l, n, 4),
     "NAND2_X1": nand2,
     "NOR2_X1": nor2,
+    "BUF_X1": buf_x1,
     "BUF_X2": buf_x2,
     "BUF_X4": buf_x4,
 }

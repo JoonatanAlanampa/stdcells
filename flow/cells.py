@@ -137,7 +137,7 @@ def dff(name):
 # the PPA result.
 LIBRARY = [
     inv("INV_X1", 1), inv("INV_X2", 2), inv("INV_X4", 4),
-    buf("BUF_X2", 2), buf("BUF_X4", 4),
+    buf("BUF_X1", 1), buf("BUF_X2", 2), buf("BUF_X4", 4),
     nandN("NAND2_X1", 2),
     norN("NOR2_X1", 2),
     dff("DFF_X1"),

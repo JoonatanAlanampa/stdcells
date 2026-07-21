@@ -131,6 +131,44 @@ library (own_sky130) {
         } }
     }
   }
+  cell (BUF_X1) {
+    area : 5.0048;
+    cell_leakage_power : 0.511128;
+    pin (A) { direction : input; capacitance : 0.002142; }
+    pin (Y) { direction : output; function : "A";
+      max_capacitance : 0.100;
+      timing () { related_pin : "A";
+        timing_sense : positive_unate;
+        cell_rise (tbl33) {
+          index_1("0.050, 0.300, 1.500");
+          index_2("5.0, 25.0, 100.0");
+          values("0.06927, 0.18046, 0.59337", \
+           "0.10118, 0.21274, 0.62612", \
+           "0.13331, 0.25148, 0.66760");
+        }
+        rise_transition (tbl33) {
+          index_1("0.050, 0.300, 1.500");
+          index_2("5.0, 25.0, 100.0");
+          values("0.04585, 0.20916, 0.82164", \
+           "0.04789, 0.20982, 0.82164", \
+           "0.06923, 0.21678, 0.82431");
+        }
+        cell_fall (tbl33) {
+          index_1("0.050, 0.300, 1.500");
+          index_2("5.0, 25.0, 100.0");
+          values("0.07004, 0.13560, 0.37660", \
+           "0.12393, 0.19257, 0.43427", \
+           "0.23103, 0.31406, 0.55773");
+        }
+        fall_transition (tbl33) {
+          index_1("0.050, 0.300, 1.500");
+          index_2("5.0, 25.0, 100.0");
+          values("0.02632, 0.10903, 0.42572", \
+           "0.03243, 0.11171, 0.42604", \
+           "0.05479, 0.12351, 0.42939");
+        } }
+    }
+  }
   cell (BUF_X2) {
     area : 5.0048;
     cell_leakage_power : 1.018795;

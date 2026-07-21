@@ -56,6 +56,22 @@ the projected areas with real ones.
 ## re-characterize + re-layout; v1 (symmetric-drive 2.61) stands as the
 ## documented fast/fat/leaky/unroutable-pins experiment.
 
+## V2 LIBRARY BUILT (2026-07-21): Wp=1.0/Wn=0.65 single-finger, no stack
+## compensation — the architecture v1's failure pointed at. Method: the
+## hd cells were dumped from the PDK GDS (dump scripts in scratch) and
+## their topology re-implemented generatively in flow/layout.py: input
+## pads hook off the gates into the now-open mid-band (licon row
+## y 1.075..1.245, pins at y 1.19 — clear of BOTH rail shadows), outputs
+## neck through with exactly 0.17 to the pad patches. ALL 7 cells
+## DRC-clean in TWO iterations (one li.5: NAND2 n-licon row must drop to
+## 0.635..0.805 under the 0.885 stub top); ALL 7 LVS MATCH (per-finger
+## netlists in cells.py = zero overrides; the extractor merges exact-
+## parallel fingers, so the LVS reference merges them too).
+## make_lef.py now emits exact rectangle decompositions for pins AND OBS
+## (bboxes of v2's snaking polygons would lie to the router — suspected
+## accessory to v1's DRT-0073). Cell areas now EQUAL hd's (3/3/5/4/6/3/3
+## sites); v1 was 1.33-2.3x bigger per cell.
+
 ## Phase 6 — LEF + OpenROAD hardening in CI
 Abstract LEF from the layouts; GitHub Actions job (ubuntu + LibreLane or
 bare OpenROAD) hardens the CORDIC-1 RTL with own.lib/own.lef on the TT 1x1

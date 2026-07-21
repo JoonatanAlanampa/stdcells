@@ -43,6 +43,30 @@ def bbox(p):
     return x0, y0, x1, y1
 
 
+def rects(p):
+    """Exact rectangle decomposition of a rectilinear polygon: horizontal
+    slabs cut at every distinct y. v2 pin/obs polygons snake through the
+    mid-band — their bounding box would cover half the cell, telling the
+    router metal (or blockage) exists where it does not."""
+    ys = sorted({round(y, 4) for _, y in p.points})
+    out = []
+    for y0, y1 in zip(ys, ys[1:]):
+        strip = gdstk.rectangle((bbox(p)[0] - 1, y0), (bbox(p)[2] + 1, y1))
+        for piece in gdstk.boolean([p], [strip], "and"):
+            out.append(bbox(piece))
+    # merge vertically-adjacent slabs with identical x extents
+    out.sort()
+    merged = []
+    for r in out:
+        if merged and abs(merged[-1][0] - r[0]) < 1e-6 and \
+                abs(merged[-1][2] - r[2]) < 1e-6 and \
+                abs(merged[-1][3] - r[1]) < 1e-6:
+            merged[-1] = (r[0], merged[-1][1], r[2], r[3])
+        else:
+            merged.append(tuple(r))
+    return merged
+
+
 lef = ["VERSION 5.7 ;", "BUSBITCHARS \"[]\" ;", "DIVIDERCHAR \"/\" ;", ""]
 merged_lib = gdstk.Library("own_cells", unit=1e-6, precision=1e-9)
 
@@ -89,7 +113,6 @@ for name in CELLS:
     for pname, (layer, poly) in sorted(pins.items()):
         if poly is None:
             raise SystemExit(f"{name}: no polygon under label {pname}")
-        x0, y0, x1, y1 = bbox(poly)
         use = "SIGNAL"
         d = "INPUT" if pname not in ("Y", "Q") else "OUTPUT"
         lef.append(f"  PIN {pname}")
@@ -97,7 +120,8 @@ for name in CELLS:
         lef.append(f"    USE {use} ;")
         lef.append("    PORT")
         lef.append(f"      LAYER {layer} ;")
-        lef.append(f"        RECT {x0:.3f} {y0:.3f} {x1:.3f} {y1:.3f} ;")
+        for x0, y0, x1, y1 in rects(poly):
+            lef.append(f"        RECT {x0:.3f} {y0:.3f} {x1:.3f} {y1:.3f} ;")
         lef.append("    END")
         lef.append(f"  END {pname}")
     for rname, poly in rails.items():
@@ -117,8 +141,9 @@ for name in CELLS:
         if polys:
             lef.append(f"    LAYER {layer} ;")
             for p in polys:
-                x0, y0, x1, y1 = bbox(p)
-                lef.append(f"      RECT {x0:.3f} {y0:.3f} {x1:.3f} {y1:.3f} ;")
+                for x0, y0, x1, y1 in rects(p):
+                    lef.append(f"      RECT {x0:.3f} {y0:.3f} "
+                               f"{x1:.3f} {y1:.3f} ;")
     lef.append("  END")
     lef.append(f"END {name}")
     lef.append("")

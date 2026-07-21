@@ -40,15 +40,24 @@ echo idrv_meas = $&idrv
 ratio_svt = results["nfet"] / results["pfet_svt"]
 ratio_hvt = results["nfet"] / results["pfet_hvt"]
 print(f"\ndrive ratios n/p: svt {ratio_svt:.2f}, hvt {ratio_hvt:.2f}")
-print("decision: svt PMOS — better drive per um lets the library hit "
-      "symmetric rise/fall with less width (the foundry hd library chose "
-      "hvt for leakage; at 921 cells and hobby duty cycles we trade "
-      "leakage for area/speed — a DESIGN CHOICE, documented).")
+print("decision: svt PMOS — better drive per um than the hvt flavor the "
+      "foundry hd library uses; we trade leakage for speed, documented.")
 
+# v2 sizing: WP is CAPPED at 1.0 um single-finger, NOT set by the measured
+# drive ratio. v1 sized WP = ratio*WN = 1.7 um for symmetric edges; the
+# folded 0.85-um PMOS fingers this forces consume the cell mid-band and
+# leave NO legal in-cell landing for input pins (detailed routing DRT-0073
+# — the hard lesson of phase 6). Wp<=1.0 single finger keeps the mid-band
+# open for pad contacts; the asymmetric rise (measured ratio still
+# reported below) is characterized honestly in the .lib. This is exactly
+# why sky130_fd_sc_hd sizes Wp=1.0/Wn=0.65 — we re-derived its shape by
+# hitting every wall that formed it.
 sizing = {
     "L": 0.15,
     "WN_X1": 0.65,
-    "WP_over_WN": round(ratio_svt, 2),
+    "WP_X1": 1.0,
+    "WP_over_WN_measured": round(ratio_svt, 2),
+    "wp_cap_reason": "in-cell pin access; see phase-6 DRT-0073 post-mortem",
     "pfet_model": DEVS["pfet_svt"],
     "nfet_model": DEVS["nfet"],
     "idsat_n_uA_per_um": results["nfet"] * 1e6,
@@ -56,4 +65,5 @@ sizing = {
 }
 (OUT / "sizing.json").write_text(json.dumps(sizing, indent=1))
 print(f"\nsizing rules -> {OUT / 'sizing.json'}: WN_X1=0.65um, "
-      f"WP = {sizing['WP_over_WN']}x WN, L=0.15um everywhere")
+      f"WP_X1=1.0um (routability cap; measured symmetric ratio would be "
+      f"{sizing['WP_over_WN_measured']}x), L=0.15um everywhere")

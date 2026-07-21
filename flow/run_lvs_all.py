@@ -46,7 +46,13 @@ def lvs_netlist(cell):
     tap cells at chip level, as in the foundry library)."""
     lines = [f".subckt {cell.name} " +
              " ".join(cell.inputs + [cell.output]) + " VPWR VGND VNB"]
-    for i, (t, d, g, s, w) in enumerate(cell.mos):
+    # the extractor's multifinger setup merges exact-parallel fingers
+    # (same D/G/S) into one wide device — mirror that here
+    merged = {}
+    for t, d, g, s, w in cell.mos:
+        key = (t, d, g, s)
+        merged[key] = round(merged.get(key, 0) + w, 3)
+    for i, ((t, d, g, s), w) in enumerate(merged.items()):
         if t == "p":
             bulk, model = "nwell_i", "sky130_fd_pr__pfet_01v8"
         else:
@@ -62,36 +68,15 @@ def lvs_netlist(cell):
     return "\n".join(lines) + "\n"
 
 
-# Layout-equivalent forms for the series-chain cells: the layout folds
-# each wide series device into two parallel chains with DISTINCT internal
-# nodes — electrically identical to the characterization netlist (exact
-# parallel duplication), topologically different, so LVS needs this form.
-OVERRIDES = {
-    "NAND2_X1": """.subckt NAND2_X1 A B Y VPWR VGND VNB
-M0 Y A VPWR nwell_i sky130_fd_pr__pfet_01v8 L=0.15u W=1.7u
-M1 Y B VPWR nwell_i sky130_fd_pr__pfet_01v8 L=0.15u W=1.7u
-M2 VGND A m1 VNB sky130_fd_pr__nfet_01v8 L=0.15u W=0.65u
-M3 m1 B Y VNB sky130_fd_pr__nfet_01v8 L=0.15u W=0.65u
-M4 Y B m2 VNB sky130_fd_pr__nfet_01v8 L=0.15u W=0.65u
-M5 m2 A VGND VNB sky130_fd_pr__nfet_01v8 L=0.15u W=0.65u
-.ends
-""",
-    "NOR2_X1": """.subckt NOR2_X1 A B Y VPWR VGND VNB
-M0 VPWR A p1 nwell_i sky130_fd_pr__pfet_01v8 L=0.15u W=0.85u
-M1 p1 B Y nwell_i sky130_fd_pr__pfet_01v8 L=0.15u W=0.85u
-M2 Y B p2 nwell_i sky130_fd_pr__pfet_01v8 L=0.15u W=0.85u
-M3 p2 A VPWR nwell_i sky130_fd_pr__pfet_01v8 L=0.15u W=0.85u
-M4 Y A VGND VNB sky130_fd_pr__nfet_01v8 L=0.15u W=0.65u
-M5 Y B VGND VNB sky130_fd_pr__nfet_01v8 L=0.15u W=0.65u
-.ends
-""",
-}
+# v2: no overrides — cells.py carries one netlist entry per physical
+# finger, so every cell (including the series chains, now single chains
+# with one internal node) is topologically identical to its layout.
 
 results = {}
 for name in CELLS:
     cell = next(c for c in LIBRARY if c.name == name)
     ref = LVS_DIR / f"{name}.spice"
-    ref.write_text(OVERRIDES.get(name) or lvs_netlist(cell))
+    ref.write_text(lvs_netlist(cell))
     gds = OUT / f"{name.lower()}.gds"
     cmd = [str(KLAYOUT), "-b", "-r", str(DECK),
            "-rd", f"input={gds}",

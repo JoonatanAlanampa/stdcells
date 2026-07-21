@@ -1,12 +1,10 @@
-* Extracted by KLayout with SKY130 LVS runset on : 20/07/2026 23:34
+* Extracted by KLayout with SKY130 LVS runset on : 21/07/2026 09:22
 
-.SUBCKT BUF_X4 5 1 4 3 7
-M$1 4 5 2 6 sky130_fd_pr__pfet_01v8 L=0.15 W=1.7 AS=0.38675 AD=0.2635 PS=3.46
-+ PD=2.32
-M$3 4 2 3 6 sky130_fd_pr__pfet_01v8 L=0.15 W=6.8 AS=1.054 AD=1.17725 PS=9.28
-+ PD=10.42
-M$11 1 5 2 7 sky130_fd_pr__nfet_01v8 L=0.15 W=0.65 AS=0.147875 AD=0.10075
-+ PS=1.885 PD=1.27
-M$13 1 2 3 7 sky130_fd_pr__nfet_01v8 L=0.15 W=2.6 AS=0.403 AD=0.450125 PS=5.08
-+ PD=5.695
+.SUBCKT BUF_X4 1 4 5 3 7
+M$1 2 1 5 6 sky130_fd_pr__pfet_01v8 L=0.15 W=1 AS=0.26 AD=0.135 PS=2.52 PD=1.27
+M$2 5 2 3 6 sky130_fd_pr__pfet_01v8 L=0.15 W=4 AS=0.54 AD=0.665 PS=5.08 PD=6.33
+M$6 2 1 4 7 sky130_fd_pr__nfet_01v8 L=0.15 W=0.65 AS=0.169 AD=0.08775 PS=1.82
++ PD=0.92
+M$7 4 2 3 7 sky130_fd_pr__nfet_01v8 L=0.15 W=2.6 AS=0.351 AD=0.43225 PS=3.68
++ PD=4.58
 .ENDS BUF_X4

@@ -1,4 +1,4 @@
 .subckt INV_X4 A Y VPWR VGND VNB
-M0 Y A VPWR nwell_i sky130_fd_pr__pfet_01v8 L=0.15u W=6.8u
+M0 Y A VPWR nwell_i sky130_fd_pr__pfet_01v8 L=0.15u W=4.0u
 M1 Y A VGND VNB sky130_fd_pr__nfet_01v8 L=0.15u W=2.6u
 .ends

@@ -166,7 +166,7 @@ def table(name, rows):
         '"' + ", ".join(f"{x*1e9:.5f}" for x in row) + '",' for row in rows)
     return f"""        {name} (tbl33) {{
           index_1("{', '.join(f'{s*1e9:.3f}' for s in SLEWS)}");
-          index_2("{', '.join(f'{c*1e15:.1f}' for c in LOADS)}");
+          index_2("{', '.join(f'{c*1e12:.3f}' for c in LOADS)}");
           values({v.rstrip(',')});
         }}"""
 
@@ -229,7 +229,7 @@ L.append(f"""library (own_sky130) {{
   lu_table_template (tbl33) {{
     variable_1 : input_net_transition; variable_2 : total_output_net_capacitance;
     index_1("{', '.join(f'{s*1e9:.3f}' for s in SLEWS)}");
-    index_2("{', '.join(f'{c*1e15:.1f}' for c in LOADS)}");
+    index_2("{', '.join(f'{c*1e12:.3f}' for c in LOADS)}");
   }}
 """)
 for cell, caps, leak, data in lib_cells:

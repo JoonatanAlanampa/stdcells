@@ -38,8 +38,8 @@ Same taped-out RTL, same yosys+ABC flow, two Liberty targets:
 | metric | **own library** | sky130_fd_sc_hd | ratio own/hd |
 |---|---|---|---|
 | mapped cells | 1782 | 969 | 1.84 |
-| chip area (µm²; all own areas from signoff layouts) | 9 821 | 8 139 | **1.21** |
-| ABC critical path (ps) | **919** | 3 525 | **0.26** |
+| chip area (µm²; all own areas from signoff layouts) | 9 106 | 8 139 | **1.12** |
+| ABC critical path (ps) | **1 890** | 3 525 | **0.54** |
 | meets the tapeout's 50 MHz | YES | YES | — |
 
 ![the nine cells](docs/cells_v2.png)
@@ -140,7 +140,11 @@ a custom DFF structurally impossible. That analysis is preserved in
 `PLAN.md`.)
 
 What v2 keeps from the measurements: **svt PMOS** (1.37× hvt drive,
-measured) — the ~4× shorter synthesis-level critical path is that choice,
+measured) — the ~2× shorter synthesis-level critical path is that choice,
+(An earlier ~4× figure was an artifact of a liberty unit bug: the load
+axis was written in fF against a declared pF unit, so STA extrapolated
+far below the characterized range. Found when TritonCTS refused the
+tables outright; every timing number since has been re-derived.)
 paid for in PMOS-off leakage (BUF_X2 ~1 nW vs single-digit pW NAND/INV
 states, measured). What v2 gives up: symmetric edges (rise is ~1.7× slow)
 and stack compensation (NAND2 251 ps vs INV_X1 195 ps mid-table) —

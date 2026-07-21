@@ -78,15 +78,21 @@ rep.append("\n## Cell mix, sky130_fd_sc_hd (top 12)\n")
 for k, v in sorted(hd["cells"].items(), key=lambda x: -x[1])[:12]:
     rep.append(f"- {k}: {v}")
 rep.append("""
-## Interpretation
+## Interpretation (v2 library)
 
-The library we measured is FAST, FAT and LEAKY — exactly where our design
-choices put it: svt PMOS (1.37x the hvt drive) sized 2.61x for symmetric
-edges makes every gate a strong driver (critical path ~4x shorter at
-synthesis level, before wire parasitics shrink that gap), at the cost of
-1.9x area and ~200x worse leakage on PMOS-off states (measured: BUF 785 pW
-vs NAND2 3.5 pW). The foundry library wins on balance; ours wins the drag
-race. Both meet the tapeout's 50 MHz with huge margin at this stage.
+v2 sizes like the foundry does (Wp=1.0/Wn=0.65 single-finger — the
+architecture that detailed routing forced, see PLAN.md phase 6) and the
+area penalty all but vanishes: ~1.1x hd for the same RTL, despite our
+8-cell library being mapped against hd's hundreds (the 1.8x cell-count
+ratio is small cells standing in for hd's complex gates — a21oi, mux2i,
+xor2 — at nearly equal silicon). The critical path stays ~4x shorter at
+synthesis level: that is the svt-PMOS choice (1.37x the hvt drive,
+measured) plus zero-wire NLDM optimism; wire parasitics will shrink it
+post-P&R. The cost is leakage on PMOS-off states (svt vs hd's hvt:
+BUF_X2 ~1 nW vs single-digit pW for NAND/INV states, measured) and the
+uncompensated series stacks (NAND2 251 ps vs INV_X1 195 ps mid-table) —
+both characterized honestly, not hidden. Both libraries meet the
+tapeout's 50 MHz with huge margin at this stage.
 """)
 rep.append("\n## Reference: the fabricated chip (TTSKY26c, commit b646d057)")
 rep.append("921 cells post-P&R with sky130_fd_sc_hd, 74.0% utilization on a "

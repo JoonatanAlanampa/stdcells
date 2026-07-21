@@ -44,9 +44,9 @@ write_verilog -noattr -nohex -nodec "{HARDEN / 'cordic_gates.v'}"
 """
 log = run_yosys(script, "synth_hybrid")
 counts = {}
-for m in re.finditer(r"^\s+(\S+)\s+(\d+)\s*$", log, re.M):
-    if not m.group(1).startswith("$"):
-        counts[m.group(1)] = int(m.group(2))
+for m in re.finditer(r"^\s+(\d+)\s+(\S+)\s*$", log, re.M):
+    if "_X" in m.group(2) or m.group(2).startswith("sky130"):
+        counts[m.group(2)] = int(m.group(1))
 own = {k: v for k, v in counts.items() if not k.startswith("sky130")}
 hd = {k: v for k, v in counts.items() if k.startswith("sky130")}
 print("own cells :", sum(own.values()), own)

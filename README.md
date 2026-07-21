@@ -19,26 +19,48 @@ that went to fabrication (TTSKY26c, commit b646d057).
 4. **Synthesis PPA comparison** (`flow/synth_compare.py`): yosys+ABC maps
    the REAL CORDIC-1 RTL (`../tt-cordic/src`) to (a) `own.lib` and
    (b) `sky130_fd_sc_hd tt` → `out/REPORT.md`.
-5. *(next phases)* Cell layouts (gdstk) → DRC/LVS → LEF → OpenROAD
-   hardening in CI → TinyTapeout.
+5. **Cell layouts** (`flow/layout.py`, gdstk) → KLayout DRC
+   (`flow/run_drc_all.py`, official `sky130A_mr.drc` deck) + LVS
+   (`flow/run_lvs_all.py`, official `sky130.lvs` deck) → LEF abstracts
+   (`flow/make_lef.py`, exact pin/OBS rectangle decompositions from the
+   signoff GDS).
+6. **Hardening** (`flow/make_hardening.py` → `harden/`): hybrid netlist
+   (own combinational + hd dfxtp_1) placed & routed by LibreLane in CI
+   on the TinyTapeout 1x1 tile budget.
 
-## Results so far — CORDIC-1 synthesis PPA (phase 4)
+## Results — CORDIC-1 synthesis PPA (library v2)
 
 Same taped-out RTL, same yosys+ABC flow, two Liberty targets:
 
-| metric | **own library** | sky130_fd_sc_hd | ratio own/hd |
+| metric | **own library v2** | sky130_fd_sc_hd | ratio own/hd |
 |---|---|---|---|
-| mapped cells | 1783 | 969 | 1.84 |
-| chip area (µm²; own = real layouts, DFF projected) | 17 686 | 8 139 | **2.17** |
-| ABC critical path (ps) | **913** | 3 525 | **0.26** |
+| mapped cells | 1782 | 969 | 1.84 |
+| chip area (µm²; own = real layouts, DFF projected) | 8 865 | 8 139 | **1.09** |
+| ABC critical path (ps) | **919** | 3 525 | **0.26** |
 | meets the tapeout's 50 MHz | YES | YES | — |
+
+![the seven v2 cells](docs/cells_v2.png)
+
+**v2 is the library the phase-6 routing failure demanded.** v1 sized for
+symmetric edges (Wp = 2.61×Wn, measured) and proved DRC/LVS-clean — then
+detailed routing rejected it: the fat folded PMOS closes the cell
+mid-band, so input pins have no in-cell access point (DRT-0073; tag
+`v1-symmetric-drive`, 2.17× hd area). v2 rebuilds every cell at
+Wp=1.0/Wn=0.65 single-finger — the sky130_fd_sc_hd architecture, studied
+from the PDK GDS and re-implemented generatively in `flow/layout.py` —
+which opens the mid-band and puts **every pin at y≈1.19, clear of both
+rail shadows**. All 7 cells came out DRC-clean in TWO iterations and
+LVS-matched with zero netlist overrides (`flow/cells.py` now carries one
+device per physical finger). Cell areas equal the foundry's exactly
+(3/3/5/4/6/3/3 sites), and the full-design area penalty collapsed from
+2.17× to 1.09×.
 
 The library is 8 cells (NOR3 and NAND3 were *dropped* after routing-cost
 analysis — library design is economics; their instances remap to NAND2/NOR2
-chains and the cost above is measured, not hidden). **All 7 combinational
-cells are DRC-clean AND LVS-verified** against the official PDK KLayout
-decks (`flow/run_lvs_all.py`) — LVS promptly earned its place by catching
-a double-width NFET in the BUF cells that DRC could never see.
+chains and the cost above is measured, not hidden). LVS earned its keep in
+v1 by catching a double-width NFET in the BUF cells that DRC could never
+see; in v2 the extractor's multifinger merge is mirrored in the reference
+netlists (`flow/run_lvs_all.py`).
 
 **Sequential cells — a documented hybrid decision**: the transmission-gate
 DFF needs split-poly columns whose lower gate contact has no legal landing
@@ -51,26 +73,25 @@ cells). A fully custom DFF (wider template or met2 routing) remains the
 stretch goal. LEF abstracts for P&R: `flow/make_lef.py` → `out/own.lef`,
 derived from the exact LVS-verified polygons.
 
-The measured library is **fast, fat and leaky — by design**: svt PMOS
-(1.37× hvt drive, measured) sized at the measured 2.61 ratio makes every
-gate a strong driver (~4× shorter critical path pre-wires) at 1.9× area
-and ~200× worse PMOS-off leakage (785 pW vs 3.5 pW, measured). Details and
-cell mix: [`out/REPORT.md`](out/REPORT.md). Every transistor's W/L:
+What v2 keeps from the measurements: **svt PMOS** (1.37× hvt drive,
+measured) — the ~4× shorter synthesis-level critical path is that choice,
+paid for in PMOS-off leakage (BUF_X2 ~1 nW vs single-digit pW NAND/INV
+states, measured). What v2 gives up: symmetric edges (rise is ~1.7× slow)
+and stack compensation (NAND2 251 ps vs INV_X1 195 ps mid-table) —
+characterized honestly, not hidden. Details and cell mix:
+[`out/REPORT.md`](out/REPORT.md). Every transistor's W/L:
 [`out/own.spice`](out/own.spice) / rules in [`out/sizing.json`](out/sizing.json).
-
-**Phase 5 first blood**: `INV_X1` layout
-([`flow/layout.py`](flow/layout.py) → `out/inv_x1.gds`) is **DRC-clean**
-against the official `sky130A_mr.drc` KLayout deck (FEOL+BEOL+offgrid),
-second iteration. Lesson already banked: folded cells need 4 sites, not
-the 3 the pre-layout area model assumed — real areas will be re-measured
-from layouts.
 
 ## Status
 
-- Phase 1–4: this repo, runs natively on Windows (ngspice + yosys from
-  oss-cad-suite + the ciel-managed sky130A PDK).
-- Area numbers before the layout phase are **projected** from a documented
-  site-count model, clearly labeled; timing and leakage are measured.
+- Phases 1–5 (probe → cells → characterize → compare → layout/DRC/LVS/LEF)
+  run natively on Windows (ngspice + oss-cad-suite yosys + KLayout + the
+  ciel-managed sky130A PDK); phase 6 (P&R) runs in CI via the LibreLane
+  container.
+- All cell areas are REAL (signoff layouts) except the DFF, which is
+  projected — hardening uses the foundry flop (hybrid decision above).
+- Library v1 (symmetric-drive experiment) is preserved at tag
+  `v1-symmetric-drive`; its post-mortem is in `PLAN.md`.
 
 ## Requirements
 

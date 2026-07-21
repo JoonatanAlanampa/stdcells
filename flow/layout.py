@@ -289,7 +289,11 @@ def buf_x2(lib, name):
     rect(LICON, 0.805, PADCUT_Y[0], 0.975, PADCUT_Y[1])         # yb licon
     licons(rect, 0.26, [(0.36, 0.53), (1.875, 2.045), (2.215, 2.385)])
     licons(rect, 0.725, [NROWS[0], (1.875, 2.045), (2.215, 2.385)])
-    licons(rect, 1.15, [(0.445, 0.615), (1.73, 1.9), (2.135, 2.305)])
+    # drain licons center at 1.155 — midway between the gate EDGES
+    # (1.02..1.29), not the 1.15 column center: at 1.15 the gate gap is
+    # 0.045 < 0.05 (licon.11) — found by magic, missed by the klayout
+    # deck's rule formulation
+    licons(rect, 1.155, [(0.445, 0.615), (1.73, 1.9), (2.135, 2.305)])
     licons(rect, 1.575, [(0.315, 0.485), NROWS[1]] + PROWS)
     rect(LI, 0.085, 0.985, 0.44, 1.355)                         # A patch
     rect(LI, 0.56, 0.085, 0.89, 0.465)                          # VGND stubs

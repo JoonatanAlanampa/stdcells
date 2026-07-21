@@ -36,7 +36,7 @@ _eq = ('same_device_classes("sky130_fd_pr__nfet_01v8", '
 DECK.write_text(_txt.replace("#=== COMPARE ===", _eq + "#=== COMPARE ==="))
 
 CELLS = ["INV_X1", "INV_X2", "INV_X4", "BUF_X2", "BUF_X4",
-         "NAND2_X1", "NOR2_X1"]
+         "NAND2_X1", "NOR2_X1", "DFF_X1"]
 
 
 def lvs_netlist(cell):
@@ -47,9 +47,12 @@ def lvs_netlist(cell):
     lines = [f".subckt {cell.name} " +
              " ".join(cell.inputs + [cell.output]) + " VPWR VGND VNB"]
     # the extractor's multifinger setup merges exact-parallel fingers
-    # (same D/G/S) into one wide device — mirror that here
+    # (same D/G/S) into one wide device — mirror that here. Model
+    # overrides (the DFF's 'special' pass nfets) are dropped to the
+    # plain nfet: the deck normalizes special_nfet to nfet_01v8 on the
+    # schematic side, and extraction has no marker layer to see anyway.
     merged = {}
-    for t, d, g, s, w in cell.mos:
+    for t, d, g, s, w, *_ in cell.mos:
         key = (t, d, g, s)
         merged[key] = round(merged.get(key, 0) + w, 3)
     for i, ((t, d, g, s), w) in enumerate(merged.items()):

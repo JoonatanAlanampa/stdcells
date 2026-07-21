@@ -43,8 +43,10 @@ class Cell:
     def spice(self):
         lines = [f".subckt {self.name} " +
                  " ".join(self.inputs + [self.output]) + " vdd vss"]
-        for i, (t, d, g, s, w) in enumerate(self.mos):
+        for i, (t, d, g, s, w, *m) in enumerate(self.mos):
             bulk, model = ("vdd", PMOD) if t == "p" else ("vss", NMOD)
+            if m:                       # explicit model override (DFF pass
+                model = m[0]            # nfets are the 'special' flavor)
             lines.append(f"xm{i} {d} {g} {s} {bulk} {model} w={w} l={L}")
         lines.append(".ends")
         return "\n".join(lines)
@@ -91,31 +93,41 @@ def norN(name, n):
     return Cell(name, ins, "Y", "(!(" + "|".join(ins) + "))", mos)
 
 
+SPECIAL_N = "sky130_fd_pr__special_nfet_01v8"
+
+
 def dff(name):
-    """Positive-edge master-slave DFF, transmission gates, isolated output
-    inverter. ~22 transistors; feedback inverters weak (0.42/0.55).
-    Characterization-only in v2: the hardened netlist uses hd dfxtp_1
-    (the custom-DFF layout remains the documented stretch goal)."""
-    WFN, WFP = 0.42, 0.55
-    WTN, WTP = 0.65, 1.0
+    """DFF_X1: the dfxtp_1 topology (24T) with svt pfets — matching the
+    layout make_dff.py produces (hd geometry minus the hvtp layer).
+    Master-slave with transmission-gate inputs and clocked-inverter
+    feedback; local two-stage clock buffer; isolated output inverter.
+    The four pass nfets are the PDK's 'special' low-leakage flavor, as
+    drawn. Widths are dfxtp_1's own (documented deviation: the pfets
+    are ~1.37x stronger here because svt — measured, characterized)."""
     m = [
-        # local clock buffers: CLK -> cn -> cp
-        ("p", "cn", "CLK", "vdd", WP), ("n", "cn", "CLK", "vss", WN),
-        ("p", "cp", "cn", "vdd", WP), ("n", "cp", "cn", "vss", WN),
-        # master pass gate: D -> m1, transparent when CLK=0
-        ("n", "D", "cn", "m1", WTN), ("p", "D", "cp", "m1", WTP),
-        # master inverter m1 -> m2, weak feedback m2 -> mfb -> (TG on CLK=1) m1
-        ("p", "m2", "m1", "vdd", WP), ("n", "m2", "m1", "vss", WN),
-        ("p", "mfb", "m2", "vdd", WFP), ("n", "mfb", "m2", "vss", WFN),
-        ("n", "mfb", "cp", "m1", WFN), ("p", "mfb", "cn", "m1", WFP),
-        # slave pass gate: m2 -> s1, transparent when CLK=1
-        ("n", "m2", "cp", "s1", WTN), ("p", "m2", "cn", "s1", WTP),
-        # slave inverter s1 -> s2, weak feedback s2 -> sfb -> (TG on CLK=0) s1
-        ("p", "s2", "s1", "vdd", WP), ("n", "s2", "s1", "vss", WN),
-        ("p", "sfb", "s2", "vdd", WFP), ("n", "sfb", "s2", "vss", WFN),
-        ("n", "sfb", "cn", "s1", WFN), ("p", "sfb", "cp", "s1", WFP),
-        # isolated output inverter: s1 (= !Q internal) ... Q = !s1
-        ("p", "Q", "s1", "vdd", WP), ("n", "Q", "s1", "vss", WN),
+        # clock: CLK -> cn -> cp
+        ("n", "cn", "CLK", "vss", 0.42), ("p", "cn", "CLK", "vdd", 0.64),
+        ("n", "vss", "cn", "cp", 0.42), ("p", "vdd", "cn", "cp", 0.64),
+        # input inverter D -> db
+        ("p", "vdd", "D", "db", 0.42), ("n", "vss", "D", "db", 0.42),
+        # master TG: db -> m1 (transparent CLK=0)
+        ("n", "db", "cn", "m1", 0.36, SPECIAL_N), ("p", "db", "cp", "m1", 0.42),
+        # master inverter m1 -> m2
+        ("p", "vdd", "m1", "m2", 0.75), ("n", "vss", "m1", "m2", 0.64),
+        # master feedback: clocked inverter m2 -> m1 (active CLK=1)
+        ("n", "mfn", "m2", "vss", 0.42),
+        ("n", "m1", "cp", "mfn", 0.36, SPECIAL_N),
+        ("p", "mfp", "m2", "vdd", 0.42), ("p", "m1", "cn", "mfp", 0.42),
+        # slave TG: m2 -> s1 (transparent CLK=1)
+        ("p", "m2", "cn", "s1", 0.42), ("n", "m2", "cp", "s1", 0.36, SPECIAL_N),
+        # slave inverter s1 -> s2
+        ("n", "s2", "s1", "vss", 0.65), ("p", "s2", "s1", "vdd", 1.0),
+        # slave feedback: clocked inverter s2 -> s1 (active CLK=0)
+        ("n", "sfn", "s2", "vss", 0.42),
+        ("n", "s1", "cn", "sfn", 0.36, SPECIAL_N),
+        ("p", "s1", "cp", "sfp", 0.42), ("p", "sfp", "s2", "vdd", 0.42),
+        # output inverter s2 -> Q
+        ("p", "vdd", "s2", "Q", 1.0), ("n", "vss", "s2", "Q", 0.65),
     ]
     return Cell(name, ["D", "CLK"], "Q", None, m, clocked="CLK")
 

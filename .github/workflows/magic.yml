@@ -1,0 +1,49 @@
+name: magic-views
+
+on:
+  push:
+    paths:
+      - "flow/magic_views.tcl"
+      - "out/own_cells.gds"
+      - ".github/workflows/magic.yml"
+  workflow_dispatch:
+
+jobs:
+  magic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache sky130 PDK
+        uses: actions/cache@v4
+        with:
+          path: pdk-root
+          key: pdk-sky130-${{ runner.os }}-v1
+
+      # Ensure the PDK exists even on a cold cache: ask librelane to
+      # resolve it (no-op when cached).
+      - name: Magic views + per-cell DRC
+        run: |
+          mkdir -p pdk-root
+          docker run --rm \
+            -v "$PWD":/work -w /work \
+            -e PDK_ROOT=/work/pdk-root \
+            --entrypoint bash \
+            ghcr.io/librelane/librelane:3.0.5 \
+            -c "set -e
+                MAGICRC=\$(find /work/pdk-root -name sky130A.magicrc | head -1)
+                test -n \"\$MAGICRC\" || { echo 'no sky130A.magicrc in PDK cache'; exit 1; }
+                magic -dnull -noconsole -rcfile \"\$MAGICRC\" flow/magic_views.tcl" \
+            | tee magic_report.txt
+          grep -q "MAGICDRC-TOTAL" magic_report.txt
+
+      - name: Upload views
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: magic-views
+          path: |
+            mag/
+            maglef/
+            magic_report.txt
+          if-no-files-found: warn

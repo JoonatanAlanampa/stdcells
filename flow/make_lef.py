@@ -19,7 +19,7 @@ MET1LBL = (68, 5)
 BND = (235, 4)
 
 CELLS = ["INV_X1", "INV_X2", "INV_X4", "BUF_X2", "BUF_X4",
-         "NAND2_X1", "NOR2_X1"]
+         "NAND2_X1", "NOR2_X1", "DFF_X1"]
 
 
 def polys_on(cell, layer):

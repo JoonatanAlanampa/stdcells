@@ -11,9 +11,9 @@
   "EXTRA_LEFS": ["dir::../out/own.lef"],
   "EXTRA_GDS_FILES": ["dir::../out/own_cells.gds"],
 
-  "FP_SIZING": "relative",
-  "FP_CORE_UTIL": 55,
-  "PL_TARGET_DENSITY_PCT": 60,
+  "FP_SIZING": "absolute",
+  "DIE_AREA": "0 0 161.00 111.52",
+  "PL_TARGET_DENSITY_PCT": 80,
 
   "RUN_KLAYOUT_XOR": false,
   "RUN_KLAYOUT_DRC": false,

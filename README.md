@@ -10,9 +10,9 @@ that went to fabrication (TTSKY26c, commit b646d057).
 
 1. **Device probe** (`flow/device_probe.py`): measure sky130 n/pFET drive
    currents in ngspice → transistor sizing rules for the library.
-2. **Cell netlists** (`flow/cells.py`): ~10 static-CMOS cells at
-   transistor level (INV/BUF/NAND/NOR/DFF...), generated with the measured
-   sizing.
+2. **Cell netlists** (`flow/cells.py`): 9 static-CMOS cells at
+   transistor level (INV x3, BUF x3, NAND2, NOR2, DFF), one entry per
+   physical finger, generated with the measured sizing.
 3. **Own characterizer** (`flow/characterize.py`): ngspice transient
    measurements → NLDM Liberty (`out/own.lib`) + Verilog models. Delays,
    transitions, input caps, leakage, clk→Q, setup — all measured by us.
@@ -24,22 +24,25 @@ that went to fabrication (TTSKY26c, commit b646d057).
    (`flow/run_lvs_all.py`, official `sky130.lvs` deck) → LEF abstracts
    (`flow/make_lef.py`, exact pin/OBS rectangle decompositions from the
    signoff GDS).
-6. **Hardening** (`flow/make_hardening.py` → `harden/`): hybrid netlist
-   (own combinational + hd dfxtp_1) placed & routed by LibreLane in CI
-   on the TinyTapeout 1x1 tile budget.
+6. **Hardening** (`flow/make_hardening.py` → `harden/`): the all-own
+   netlist (our combinational cells AND our DFF_X1) placed & routed by
+   LibreLane in CI on the TinyTapeout 1x1 tile.
+7. **Magic-native views** (`flow/magic_views.tcl` + the `magic-views`
+   workflow): `.mag`/`.maglef` per cell + magic DRC held to foundry-cell
+   parity.
 
 ## Results — CORDIC-1 synthesis PPA (library v2)
 
 Same taped-out RTL, same yosys+ABC flow, two Liberty targets:
 
-| metric | **own library v2** | sky130_fd_sc_hd | ratio own/hd |
+| metric | **own library** | sky130_fd_sc_hd | ratio own/hd |
 |---|---|---|---|
 | mapped cells | 1782 | 969 | 1.84 |
-| chip area (µm²; own = real layouts, DFF projected) | 8 865 | 8 139 | **1.09** |
+| chip area (µm²; all own areas from signoff layouts) | 9 821 | 8 139 | **1.21** |
 | ABC critical path (ps) | **919** | 3 525 | **0.26** |
 | meets the tapeout's 50 MHz | YES | YES | — |
 
-![the seven v2 cells](docs/cells_v2.png)
+![the nine cells](docs/cells_v2.png)
 
 **v2 is the library the phase-6 routing failure demanded.** v1 sized for
 symmetric edges (Wp = 2.61×Wn, measured) and proved DRC/LVS-clean — then
@@ -55,9 +58,10 @@ device per physical finger). Cell areas equal the foundry's exactly
 (3/3/5/4/6/3/3 sites), and the full-design area penalty collapsed from
 2.17× to 1.09×.
 
-The library is 8 cells (NOR3 and NAND3 were *dropped* after routing-cost
-analysis — library design is economics; their instances remap to NAND2/NOR2
-chains and the cost above is measured, not hidden). LVS earned its keep in
+The library is 9 cells — INV_X1/X2/X4, BUF_X1/X2/X4, NAND2, NOR2, and
+DFF_X1 (NOR3 and NAND3 were *dropped* after routing-cost analysis —
+library design is economics; their instances remap to NAND2/NOR2 chains
+and the cost above is measured, not hidden). LVS earned its keep in
 v1 by catching a double-width NFET in the BUF cells that DRC could never
 see; in v2 the extractor's multifinger merge is mirrored in the reference
 netlists (`flow/run_lvs_all.py`).
@@ -77,8 +81,9 @@ with hd cells; the added implant is diamond-shaped, diff-free and
 electrically inert, and the healed GDS is re-checked by the full deck.
 Magic's DRC/LVS are demoted to warnings in `harden/config.json`: magic's
 CIF read of GDS-only custom cells reports tens of thousands of phantom
-errors on a layout the official KLayout deck proves clean (magic-native
-cell views are future work if this library ever goes on a real shuttle).
+errors on a layout the official KLayout deck proves clean; the
+magic-native views (section below) later reduced the disagreement to
+exactly the tap/latch-up rules every standalone cell shows.
 
 **And it fits the tile — with every sequential and logic cell our own.**
 With the die pinned to the exact TinyTapeout 1x1 footprint the
@@ -86,6 +91,10 @@ fabricated chip used (161.00 × 111.52 µm), the all-own netlist (1787 own
 cells incl. 191 DFF_X1; only the 18 tie cells remain foundry) places,
 routes, and passes the full signoff deck with 0 violations — final hold
 slack +0.006 ns and setup +12.3 ns at the worst corners, 87% utilization.
+(Full disclosure: the P&R *flow* still inserts foundry cells of its own —
+clock buffers, hold/delay cells, taps, fills, antenna diodes, ~7k µm²
+of the tile. Replacing those with own equivalents is the identified next
+leg; see the closing note.)
 
 Hard-won tuning lessons along the way: (1) a fast library makes hold
 *overfixing* expensive — the default 0.1 ns resizer margin × our 171 ps
@@ -125,16 +134,10 @@ DRC (clean), KLayout LVS against the 24T netlist transcribed in
 deck itself), our characterizer (clk→Q 351 ps, setup ≈ 0, D pin 1.11 fF),
 our LEF. The hybrid era is over.
 
-**Sequential cells — a documented hybrid decision**: the transmission-gate
-DFF needs split-poly columns whose lower gate contact has no legal landing
-zone in this cell template (the same class of geometric dead-end that
-eliminated NAND3, but structural). Hardening therefore uses a hybrid
-library — our 7 verified combinational cells plus the foundry's
-silicon-proven `sky130_fd_sc_hd__dfxtp_1` flop — which is standard
-industry practice (flops are the most timing-critical, verification-heavy
-cells). A fully custom DFF (wider template or met2 routing) remains the
-stretch goal. LEF abstracts for P&R: `flow/make_lef.py` → `out/own.lef`,
-derived from the exact LVS-verified polygons.
+(Historical note: v1 and early v2 hardened with a hybrid library —
+our combinational cells + the foundry flop — because the v1 template made
+a custom DFF structurally impossible. That analysis is preserved in
+`PLAN.md`.)
 
 What v2 keeps from the measurements: **svt PMOS** (1.37× hvt drive,
 measured) — the ~4× shorter synthesis-level critical path is that choice,
@@ -149,14 +152,20 @@ characterized honestly, not hidden. Details and cell mix:
 
 - Phases 1–5 (probe → cells → characterize → compare → layout/DRC/LVS/LEF)
   run natively on Windows (ngspice + oss-cad-suite yosys + KLayout + the
-  ciel-managed sky130A PDK); phase 6 (P&R) runs in CI via the LibreLane
-  container.
-- All cell areas are REAL (signoff layouts) except the DFF, which is
-  projected — hardening uses the foundry flop (hybrid decision above).
+  ciel-managed sky130A PDK); P&R and the magic checks run in CI via the
+  LibreLane container (`harden` + `magic-views` workflows, both green).
+- All 9 cell areas are REAL (signoff layouts), the DFF included; every
+  cell is DRC-clean (official KLayout deck), LVS-matched, and at
+  foundry-cell parity under magic DRC.
 - Library v1 (symmetric-drive experiment) is preserved at tag
   `v1-symmetric-drive`; its post-mortem is in `PLAN.md`.
+- Identified next leg: own tie/tap/fill/antenna cells + steering CTS and
+  hold repair away from foundry cells, so the only foundry content left
+  is the interconnect definition itself.
 
 ## Requirements
 
 sky130A PDK via `pip install ciel; ciel enable --pdk-family sky130 <ver>`;
-ngspice (see `../devphys/tools`); oss-cad-suite yosys.
+ngspice (see `../devphys/tools`); oss-cad-suite yosys; KLayout ≥ 0.30
+(DRC/LVS decks run headless); gdstk + matplotlib (layout generation and
+the contact sheet).

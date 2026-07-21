@@ -10,9 +10,10 @@ that went to fabrication (TTSKY26c, commit b646d057).
 
 1. **Device probe** (`flow/device_probe.py`): measure sky130 n/pFET drive
    currents in ngspice → transistor sizing rules for the library.
-2. **Cell netlists** (`flow/cells.py`): 9 static-CMOS cells at
-   transistor level (INV x3, BUF x3, NAND2, NOR2, DFF), one entry per
-   physical finger, generated with the measured sizing.
+2. **Cell netlists** (`flow/cells.py`): 9 characterized static-CMOS
+   cells at transistor level (INV x3, BUF x3, NAND2, NOR2, DFF), one
+   entry per physical finger, generated with the measured sizing —
+   plus 7 physical-only cells (tie/tap/diode/fill) in `flow/layout.py`.
 3. **Own characterizer** (`flow/characterize.py`): ngspice transient
    measurements → NLDM Liberty (`out/own.lib`) + Verilog models. Delays,
    transitions, input caps, leakage, clk→Q, setup — all measured by us.
@@ -42,7 +43,7 @@ Same taped-out RTL, same yosys+ABC flow, two Liberty targets:
 | ABC critical path (ps) | **1 890** | 3 525 | **0.54** |
 | meets the tapeout's 50 MHz | YES | YES | — |
 
-![the nine cells](docs/cells_v2.png)
+![all sixteen cells of lib-v1.0](docs/cells_v2.png)
 
 **v2 is the library the phase-6 routing failure demanded.** v1 sized for
 symmetric edges (Wp = 2.61×Wn, measured) and proved DRC/LVS-clean — then
@@ -58,10 +59,12 @@ device per physical finger). Cell areas equal the foundry's exactly
 (3/3/5/4/6/3/3 sites), and the full-design area penalty collapsed from
 2.17× to 1.09×.
 
-The library is 9 cells — INV_X1/X2/X4, BUF_X1/X2/X4, NAND2, NOR2, and
-DFF_X1 (NOR3 and NAND3 were *dropped* after routing-cost analysis —
-library design is economics; their instances remap to NAND2/NOR2 chains
-and the cost above is measured, not hidden). LVS earned its keep in
+The library is 16 cells: 9 characterized — INV_X1/X2/X4, BUF_X1/X2/X4,
+NAND2, NOR2, DFF_X1 — plus 7 physical-only cells that complete
+self-sufficiency: TIE_X1 (cross-coupled 2T tie), WELLTAP_X1, DIODE_X1
+(antenna), FILL_X1–X8. (NOR3 and NAND3 were *dropped* after routing-cost
+analysis — library design is economics; their instances remap to
+NAND2/NOR2 chains and the cost above is measured, not hidden.) LVS earned its keep in
 v1 by catching a double-width NFET in the BUF cells that DRC could never
 see; in v2 the extractor's multifinger merge is mirrored in the reference
 netlists (`flow/run_lvs_all.py`).
@@ -164,14 +167,17 @@ characterized honestly, not hidden. Details and cell mix:
   run natively on Windows (ngspice + oss-cad-suite yosys + KLayout + the
   ciel-managed sky130A PDK); P&R and the magic checks run in CI via the
   LibreLane container (`harden` + `magic-views` workflows, both green).
-- All 9 cell areas are REAL (signoff layouts), the DFF included; every
-  cell is DRC-clean (official KLayout deck), LVS-matched, and at
-  foundry-cell parity under magic DRC.
+- All 16 cells have REAL signoff layouts; every cell is DRC-clean
+  (official KLayout deck), LVS-matched where devices exist, and at
+  foundry-cell parity under magic DRC. Signal pins are on met1
+  (in-cell mcon + pad) — the router never touches li.
 - Library v1 (symmetric-drive experiment) is preserved at tag
   `v1-symmetric-drive`; its post-mortem is in `PLAN.md`.
-- Identified next leg: own tie/tap/fill/antenna cells + steering CTS and
-  hold repair away from foundry cells, so the only foundry content left
-  is the interconnect definition itself.
+- Zero-foundry leg COMPLETE and released as **`lib-v1.0`** — the only
+  foundry content left is the interconnect definition itself. Next
+  legs: the vertical-slice tapeout consumes this tag; then v3 cells on
+  devphys-derived custom device geometries; internal-power (dynamic
+  energy) characterization is the known gap in own.lib.
 
 ## Requirements
 

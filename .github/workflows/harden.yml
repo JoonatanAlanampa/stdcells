@@ -53,7 +53,10 @@ jobs:
             -c "set -e
                 klayout -b -r flow/heal_hvtp.py \
                   -rd input=$GDS -rd output=$RUNDIR/final/gds/healed.gds
-                klayout -b -r /work/pdk-root/sky130A/libs.tech/klayout/drc/sky130A_mr.drc \
+                DECK=\$(find /work/pdk-root -name sky130A_mr.drc | head -1)
+                test -n \"\$DECK\" || { echo 'sky130A_mr.drc not in PDK'; exit 1; }
+                echo \"deck: \$DECK\"
+                klayout -b -r \"\$DECK\" \
                   -rd input=$RUNDIR/final/gds/healed.gds \
                   -rd report=$RUNDIR/final/signoff_drc.lyrdb \
                   -rd feol=true -rd beol=true -rd offgrid=true"

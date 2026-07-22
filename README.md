@@ -208,6 +208,88 @@ reproduces lib-v1.0 exactly (clk→Q 351 ps, setup ≈ 0).
   (dynamic energy) characterization is the known remaining gap in the
   Liberty views.
 
+## PVT analysis — custom library vs sky130_fd_sc_hd
+
+`flow/pvt_compare.py` compares the custom library (`lib-v1.1`, three PVT
+corners) against the foundry `sky130_fd_sc_hd`, cell-for-cell on the same
+sky130 process. Every delay is the `cell_rise` propagation delay
+bilinear-interpolated from each cell's NLDM table to **one common operating
+point — input slew 0.30 ns, output load 0.025 pF — used identically for both
+libraries**. The point lands inside every table's index range (no clamping);
+on the custom lib it hits a grid node exactly, on hd it interpolates. The
+custom cells are single-Vt **svt** ("fast/fat/leaky by design"); hd is a
+production multi-Vt-capable library — so expect the custom cells faster but
+leakier at nominal. Reproduce with `python flow/pvt_compare.py`.
+
+### Delay — `cell_rise` at 0.30 ns / 0.025 pF  [ps]
+
+| cell  | own tt | own ss | own ff | hd tt | hd ss | hd ff |
+|-------|-------:|-------:|-------:|------:|------:|------:|
+| INV   | 265.6  | 310.7  | 250.0  | 284.7 | 371.9 | 234.9 |
+| NAND2 | 267.0  | 313.0  | 250.9  | 305.4 | 418.9 | 250.3 |
+| NOR2  | 410.6  | 511.7  | 371.1  | 461.0 | 712.5 | 348.5 |
+| DFF   | 351.2  | 505.3  | 273.2  | 524.0 | 959.6 | 339.2 |
+
+DFF = CLK→Q `rising_edge` arc; gates = first input arc. Delays order **ss >
+tt > ff** for every cell in both libraries. The custom svt cells are faster
+than hd at the nominal (tt) and slow (ss) corners for every cell — most
+dramatically the flip-flop: **CLK→Q 351 vs 524 ps at tt, and 505 vs 960 ps at
+the timing-critical ss corner (~1.9× faster)**. At the fast ff corner the lead
+narrows or reverses for the simple gates (hd INV 234.9 beats own 250.0 ps),
+but ff is the best-case corner and rarely sets the clock.
+
+### Corner spread — delay(ss) / delay(ff)
+
+| cell  |   own |    hd |
+|-------|------:|------:|
+| INV   | 1.243 | 1.583 |
+| NAND2 | 1.247 | 1.673 |
+| NOR2  | 1.379 | 2.045 |
+| DFF   | 1.850 | 2.829 |
+
+At this operating point the custom cells' delay swings less across the process
+box than hd's. Read it as a measured comparison **at 0.30 ns / 0.025 pF**, not
+a universal robustness claim: a fixed input slew adds a corner-independent
+component that compresses the ratio, and a ring oscillator runs at a much
+lighter load and faster slew than this point.
+
+### Leakage — `cell_leakage_power` per corner  [nW]
+
+| cell  | own tt  | own ss  | own ff  | hd tt   | hd ss    | hd ff   |
+|-------|--------:|--------:|--------:|--------:|---------:|--------:|
+| INV   | 0.00346 | 0.00708 | 0.00383 | 0.00533 | 4.02642  | 0.00315 |
+| NAND2 | 0.00336 | 0.00336 | 0.00383 | 0.00212 | 2.26812  | 0.00312 |
+| NOR2  | 0.00692 | 0.01417 | 0.00766 | 0.00197 | 2.11692  | 0.00325 |
+| DFF   | 1.06451 | 6.21589 | 0.27534 | 0.00844 | 14.65205 | 0.01452 |
+
+Both libraries declare `leakage_power_unit : "1nW"`. **Caveat:** the custom
+values are measured in a *single input state at a single operating point*, so
+they are a **lower bound** — a companion internal-power analysis estimates
+single-state measurement understates the state-averaged figure ~27–53×, and it
+shows here as an unphysically *flat* temperature trend (own NAND2 is identical
+at tt and ss). hd's foundry data captures the full ~100 °C subthreshold rise
+(hd INV climbs ~750× to 4.0 nW at ss). **Do not read the `ss` columns as the
+custom cells out-leaking hd** — that reversal is the measurement gap, not a
+real advantage. The comparable, honest takeaway is at **tt**, where even a
+lower bound already exceeds hd: the svt cells leak more by design — the DFF
+~126× more than hd (1.065 vs 0.0084 nW). Full state-averaged leakage is the
+known open gap (see *Next legs*).
+
+### Area  [µm²]
+
+Per-cell area is **identical** — the custom cells are drawn to the same
+standard-cell footprints (site widths) as their hd counterparts for drop-in
+compatibility: INV/NAND2/NOR2 = 3.7536, DFF = 20.0192 in both. Any
+library-level density gap vs hd is a placement / cell-count effect, not
+per-cell.
+
+**For the vertical-slice silicon experiment:** the three-corner
+characterization gives each cell a concrete tt→ss→ff delay envelope, so the
+fabricated ring-oscillator frequency can be checked against a predicted *band*
+rather than a single number — a reading outside the envelope flags a
+mischaracterized model rather than ordinary process spread. (The RO's own
+operating point is lighter-load / faster-slew than this table's.)
+
 ## Requirements
 
 sky130A PDK via `pip install ciel; ciel enable --pdk-family sky130 <ver>`;

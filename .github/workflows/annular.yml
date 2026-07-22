@@ -1,0 +1,89 @@
+name: annular-extract
+
+# v3 scope-b gate-check: push the hand-drawn ring-gate nfet through magic
+# extract + magic DRC and report what the extractor makes of a closed-loop
+# gate (device type, W/L). Reuses the librelane container + cached PDK from
+# the magic-views / harden jobs. Additive; no library files involved.
+
+on:
+  push:
+    paths:
+      - "flow/annular/**"
+      - ".github/workflows/annular.yml"
+  workflow_dispatch:
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache sky130 PDK
+        uses: actions/cache@v4
+        with:
+          path: pdk-root
+          key: pdk-sky130-${{ runner.os }}-v1
+
+      - name: Magic extract + DRC the annular nfet
+        run: |
+          mkdir -p pdk-root
+          docker run --rm \
+            -v "$PWD":/work -w /work \
+            -e PDK_ROOT=/work/pdk-root \
+            --entrypoint bash \
+            ghcr.io/librelane/librelane:3.0.5 \
+            -c "set -e
+                MAGICRC=\$(find /work/pdk-root -name sky130A.magicrc | head -1)
+                test -n \"\$MAGICRC\" || { echo 'no sky130A.magicrc in PDK cache — run harden once to warm it'; exit 1; }
+                export PDK_ROOT=\${MAGICRC%/sky130A/libs.tech/magic/sky130A.magicrc}
+                echo \"PDK_ROOT=\$PDK_ROOT\"
+                magic -dnull -noconsole -rcfile \"\$MAGICRC\" flow/annular/extract_annular.tcl" \
+            | tee extract_report.txt
+
+      - name: Verdict
+        run: |
+          sudo chown -R "$USER" . || true
+          python3 - << 'EOF'
+          import re
+          t = open("extract_report.txt").read()
+          drc = re.search(r"MAGIC-DRC-COUNT (\d+)", t)
+          # netlist between the markers
+          nl = re.search(r"=== EXTRACTED-NETLIST ===(.*?)=== END-EXTRACTED-NETLIST ===",
+                         t, re.S)
+          body = nl.group(1) if nl else ""
+          devs = [l.strip() for l in body.splitlines()
+                  if re.search(r"nfet|nshort|sky130_fd_pr__|^[XM]\d", l)
+                  and not l.strip().startswith("*")]
+          nomatch = "No matching extraction type" in t
+          print("magic DRC violation count:", drc.group(1) if drc else "?")
+          print("extractor 'No matching extraction type':", nomatch)
+          print("extracted device lines:")
+          for l in devs[:20]:
+              print("   ", l)
+          for l in devs:
+              for m in re.finditer(r"\b[wW]\s*=\s*([0-9.eEpu+-]+)", l):
+                  print("   -> magic assigned W =", m.group(1))
+              for m in re.finditer(r"\b[lL]\s*=\s*([0-9.eEpu+-]+)", l):
+                  print("   -> magic assigned L =", m.group(1))
+          print("---")
+          if nomatch:
+              print("VERDICT: magic REJECTS the ring gate (no matching device type) "
+                    "-> annular is a tooling dead-end without extractor work.")
+          elif devs:
+              print("VERDICT: magic EXTRACTS device(s) from the ring gate. Inspect "
+                    "the W above: is it defined/sensible, or an artifact?")
+          else:
+              print("VERDICT: no device lines parsed -> read extract_report.txt "
+                    "(artifact) to see what magic did.")
+          EOF
+
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: annular-extract
+          path: |
+            extract_report.txt
+            annular_nfet.spice
+            annular_nfet.ext
+          if-no-files-found: warn

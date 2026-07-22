@@ -8,6 +8,34 @@
   "ERROR_ON_NL_ASSIGN_STATEMENTS": false,
   "CLOCK_PORT": "clk",
   "CLOCK_PERIOD": 20,
+  "__comment_LIB": [
+    "lib-v1.1: one timing view PER CORNER. Previously the single nominal",
+    "own_hardening.lib was passed via EXTRA_LIBS, which LibreLane documents as",
+    "'loaded indiscriminately for all timing corners' -- so all nine STA",
+    "corners, and all nine SDF files, came out byte-identical. LIB is the",
+    "corner-keyed variable (Dict[corner-pattern, List[Path]]); the sky130A PDK",
+    "declares 9 corners = {nom,min,max} x {tt_025C_1v80, ss_100C_1v60,",
+    "ff_n40C_1v95}, so the three patterns below cover them all. The hd libs",
+    "are kept alongside ours because the flow still loads hd views even though",
+    "EXTRA_EXCLUDED_CELLS keeps them out of the netlist.",
+    "EXTRA_LIBS is retained ONLY so the yosys elaborate step can blackbox our",
+    "cells; flow/check_corner_spread.py asserts the SDF corners really differ,",
+    "which is what catches it if that nominal view ever overrides LIB."
+  ],
+  "LIB": {
+    "*_tt_025C_1v80": [
+      "pdk_dir::libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__tt_025C_1v80.lib",
+      "dir::../out/own_hardening_tt_025C_1v80.lib"
+    ],
+    "*_ss_100C_1v60": [
+      "pdk_dir::libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ss_100C_1v60.lib",
+      "dir::../out/own_hardening_ss_100C_1v60.lib"
+    ],
+    "*_ff_n40C_1v95": [
+      "pdk_dir::libs.ref/sky130_fd_sc_hd/lib/sky130_fd_sc_hd__ff_n40C_1v95.lib",
+      "dir::../out/own_hardening_ff_n40C_1v95.lib"
+    ]
+  },
   "EXTRA_LIBS": [
     "dir::../out/own_hardening.lib"
   ],

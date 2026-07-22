@@ -39,15 +39,35 @@ PHYS_CELLS = """
   cell (FILL_X4) { area : 5.0048; cell_leakage_power : 0; }
   cell (FILL_X8) { area : 10.0096; cell_leakage_power : 0; }
 """
+def add_phys_cells(text):
+    """Append the physical-only cells (fill/tap/diode) to a liberty file."""
+    full = text.rstrip()
+    assert full.endswith("}"), "unexpected liberty tail"
+    return full[:-1] + PHYS_CELLS + "}\n"
+
+
 lib = (OUT / "own.lib").read_text()
-lib_full = lib.rstrip()
-assert lib_full.endswith("}"), "unexpected liberty tail"
-lib_full = lib_full[:-1] + PHYS_CELLS + "}\n"
-(OUT / "own_hardening.lib").write_text(lib_full)
+(OUT / "own_hardening.lib").write_text(add_phys_cells(lib))
 comb, n = re.subn(r"\n  cell \(DFF_X1\).*?\n  \}(?=\n)", "", lib, flags=re.S)
 assert n == 1, "DFF_X1 cell block not found"
 (OUT / "own_abc.lib").write_text(comb)
 print("own_hardening.lib (full) + own_abc.lib (comb-only) written")
+
+# lib-v1.1: one hardening view per PVT corner, so P&R and STA see a real
+# corner spread instead of nine byte-identical copies of the nominal library.
+# ABC keeps mapping at the nominal corner -- technology mapping is a
+# structural choice, not a signoff one.
+corner_libs = sorted(OUT.glob("own_*C_*v*.lib"))
+for src in corner_libs:
+    corner = src.stem[len("own_"):]
+    (OUT / f"own_hardening_{corner}.lib").write_text(
+        add_phys_cells(src.read_text()))
+if corner_libs:
+    print(f"per-corner hardening libs: "
+          f"{', '.join(p.stem[len('own_'):] for p in corner_libs)}")
+else:
+    print("WARNING: no per-corner libs found — run characterize.py for all "
+          "PVTs to get a corner spread (see lib-v1.1)")
 
 script = f"""
 read_verilog -sv "{RTL / 'cordic.sv'}" "{RTL / 'project.sv'}"

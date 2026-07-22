@@ -6,6 +6,8 @@ on:
       - "harden/**"
       - "out/own.lef"
       - "out/own_hardening.lib"
+      - "out/own_hardening_*.lib"
+      - "flow/check_corner_spread.py"
       - "out/own_cells.gds"
       - ".github/workflows/harden.yml"
   workflow_dispatch:
@@ -40,6 +42,15 @@ jobs:
       # layout is clean under the official KLayout deck), and netgen LVS
       # depends on that same magic extraction. Cell-level LVS is done with
       # the PDK's KLayout deck in flow/run_lvs_all.py.
+      # lib-v1.1 acceptance test. A single-PVT library passed through
+      # EXTRA_LIBS produced nine byte-identical SDF corners and still ran
+      # green, so the property is asserted rather than assumed.
+      - name: Timing corners must actually differ
+        run: |
+          sudo chown -R "$USER" harden/runs || true
+          RUNDIR=$(ls -d harden/runs/*/ | sort | tail -1)
+          python3 flow/check_corner_spread.py "$RUNDIR"
+
       - name: hvtp corner healing + KLayout signoff DRC
         run: |
           sudo chown -R "$USER" harden/runs || true

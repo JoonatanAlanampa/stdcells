@@ -2,5 +2,6 @@
 out/*.log
 out/*.ys
 out/*.yslog
+out/*.out
 __pycache__/
 harden/runs/

@@ -15,8 +15,11 @@ that went to fabrication (TTSKY26c, commit b646d057).
    entry per physical finger, generated with the measured sizing —
    plus 7 physical-only cells (tie/tap/diode/fill) in `flow/layout.py`.
 3. **Own characterizer** (`flow/characterize.py`): ngspice transient
-   measurements → NLDM Liberty (`out/own.lib`) + Verilog models. Delays,
-   transitions, input caps, leakage, clk→Q, setup — all measured by us.
+   measurements → NLDM Liberty + Verilog models. Delays, transitions, input
+   caps, leakage, clk→Q, setup — all measured by us, at **each of the three
+   sky130A signoff corners** (`out/own_tt_025C_1v80.lib`,
+   `own_ss_100C_1v60.lib`, `own_ff_n40C_1v95.lib`; `own.lib` remains the
+   nominal one). See *Timing corners* below for why one PVT was not enough.
 4. **Synthesis PPA comparison** (`flow/synth_compare.py`): yosys+ABC maps
    the REAL CORDIC-1 RTL (`../tt-cordic/src`) to (a) `own.lib` and
    (b) `sky130_fd_sc_hd tt` → `out/REPORT.md`.
@@ -174,10 +177,36 @@ characterized honestly, not hidden. Details and cell mix:
 - Library v1 (symmetric-drive experiment) is preserved at tag
   `v1-symmetric-drive`; its post-mortem is in `PLAN.md`.
 - Zero-foundry leg COMPLETE and released as **`lib-v1.0`** — the only
-  foundry content left is the interconnect definition itself. Next
-  legs: the vertical-slice tapeout consumes this tag; then v3 cells on
-  devphys-derived custom device geometries; internal-power (dynamic
-  energy) characterization is the known gap in own.lib.
+  foundry content left is the interconnect definition itself.
+- **`lib-v1.1` — multi-PVT timing.** Every cell is now characterized at
+  all three sky130A signoff corners (`tt_025C_1v80`, `ss_100C_1v60`,
+  `ff_n40C_1v95`), and the hardening config feeds them through the
+  corner-keyed `LIB` variable instead of the single-corner `EXTRA_LIBS`,
+  which LibreLane loads "indiscriminately for all timing corners". Before
+  this, the nine STA corners (and their SDF) were byte-identical, so a
+  measured-vs-predicted silicon gap on the vertical-slice ring
+  oscillators had no corner spread to be attributed to. Fixing it
+  surfaced two real defects the single-PVT flow had hidden: the DFF
+  clk→Q measurement assumed the flop powered up with Q=0 (true at tt,
+  false at ff → NaN tables), and `characterize.py` could not be imported
+  without running the whole flow. `flow/check_corner_spread.py` now
+  asserts, in CI, that the corners actually differ. See *Timing corners*.
+
+### Timing corners (lib-v1.1)
+
+`flow/characterize.py` re-measures the full library at each corner
+(`python characterize.py` does all three; pass a corner name for one).
+The delay spread is real — ss/ff ≈ 2× — and it is what turns a cold-vs-
+warm ring-oscillator measurement in silicon into an attributable result
+rather than a single number with no error bar. The DFF captures are now
+each measured from a run preconditioned into the opposite state, so the
+answer cannot depend on the power-up state; the nominal corner still
+reproduces lib-v1.0 exactly (clk→Q 351 ps, setup ≈ 0).
+
+- Next legs: the vertical-slice tapeout consumes a pinned tag; then v3
+  cells on devphys-derived custom device geometries; internal-power
+  (dynamic energy) characterization is the known remaining gap in the
+  Liberty views.
 
 ## Requirements
 

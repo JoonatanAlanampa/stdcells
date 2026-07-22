@@ -8,6 +8,7 @@ on:
       - "out/own_hardening.lib"
       - "out/own_hardening_*.lib"
       - "flow/check_corner_spread.py"
+      - "flow/check_monotonic.py"
       - "out/own_cells.gds"
       - ".github/workflows/harden.yml"
   workflow_dispatch:
@@ -17,6 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # lib-v1.3 fast gate (no PDK/P&R needed): delay must be monotonic in
+      # output load across every corner. Slew-direction dips are the documented
+      # physical early-trip of the asymmetric cells and are reported, not failed.
+      - name: NLDM load-monotonicity guard
+        run: python3 flow/check_monotonic.py
 
       - name: Cache sky130 PDK
         uses: actions/cache@v4

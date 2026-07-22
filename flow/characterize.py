@@ -36,6 +36,17 @@ lib-v1.2 closes the two gaps research/internal-power.md ranked highest:
 
 The PVT is carried in module globals that the netlist builders read at call
 time, so set_pvt() is all it takes -- no netlist code is PVT-aware.
+
+lib-v1.3 documents (does not change) a physical property of these cells: because
+they are asymmetric by design (WP 1.0 um > WN 0.65 um, the routability sizing),
+their switching threshold is off Vdd/2, so the 50-50 propagation delay can go
+NEGATIVE and can SHRINK with a slower input ramp -- the output trips before the
+input reaches 50 % (waveform-confirmed: INV_X4 cell_fall at ff/1.5 ns/2 fF is
+-96 ps). Liberty permits negative delays and this flow does not clamp measured
+data, so both are emitted as measured. They are confined to light-load / fast-
+cell / slow-input entries the design never signs off on; load-monotonicity -- the
+property STA leans on for a fixed driver -- holds everywhere. flow/check_monotonic.py
+asserts that load-monotonicity (a regression guard) and reports the slew dips.
 """
 import itertools
 import sys

@@ -191,6 +191,27 @@ characterized honestly, not hidden. Details and cell mix:
   false at ff → NaN tables), and `characterize.py` could not be imported
   without running the whole flow. `flow/check_corner_spread.py` now
   asserts, in CI, that the corners actually differ. See *Timing corners*.
+- **`lib-v1.2` — internal power, per-state leakage, RO-interior grid.** The NLDM
+  grid gained a fast-slew (20 ps) and low-load (2 fF) point so the vertical-slice
+  ring oscillator's operating point (~50 ps, ~3.6 fF) is *interior* to the index
+  box instead of extrapolated below it. Each combinational cell now emits
+  `internal_power` (rise/fall switching energy in pJ, validated against the
+  E = supply − ½·C·Vdd² shape sky130_fd_sc_hd ships) and per-state
+  `leakage_power(when)` (the old all-low measurement understated an inverter's
+  average ~74×); `cell_leakage_power` is the average over states. The hardened
+  netlist is byte-identical to lib-v1.1 — only the timing/power views changed.
+- **`lib-v1.3` — load-monotonicity guard + honest documentation.**
+  `flow/check_monotonic.py` asserts, in CI, that delay is monotonic in *output
+  load* — physically unconditional, and the property STA leans on for a fixed
+  driver — across every corner. It deliberately does *not* require
+  slew-monotonicity: these cells are asymmetric (WP 1.0 > WN 0.65 µm, the
+  routability sizing), so the 50-50 delay legitimately goes negative and shrinks
+  with a slower input ramp — the output trips before the input reaches 50 %
+  (waveform-confirmed: INV_X4 cell_fall at ff/1.5 ns/2 fF is −96 ps). Those
+  entries are physical, present since lib-v1.0, confined to a light-load/fast-
+  cell/slow-input region the design never signs off on, and are emitted unclamped
+  rather than fabricated into monotonicity. No re-characterization; the
+  vertical-slice pin is unaffected.
 
 ### Timing corners (lib-v1.1)
 
@@ -203,10 +224,10 @@ each measured from a run preconditioned into the opposite state, so the
 answer cannot depend on the power-up state; the nominal corner still
 reproduces lib-v1.0 exactly (clk→Q 351 ps, setup ≈ 0).
 
-- Next legs: the vertical-slice tapeout consumes a pinned tag; then v3
-  cells on devphys-derived custom device geometries; internal-power
-  (dynamic energy) characterization is the known remaining gap in the
-  Liberty views.
+- Next legs: the vertical-slice tapeout consumes a pinned tag (now
+  `lib-v1.2`); then v3 cells on devphys-derived custom device geometries.
+  Deferred, neither blocking the design: measuring the DFF hold constraint
+  (currently 0.0) and emitting DFF internal power.
 
 ## PVT analysis — custom library vs sky130_fd_sc_hd
 

@@ -57,7 +57,8 @@ print("own_hardening.lib (full) + own_abc.lib (comb-only) written")
 # corner spread instead of nine byte-identical copies of the nominal library.
 # ABC keeps mapping at the nominal corner -- technology mapping is a
 # structural choice, not a signoff one.
-corner_libs = sorted(OUT.glob("own_*C_*v*.lib"))
+corner_libs = sorted(p for p in OUT.glob("own_*C_*v*.lib")
+                     if "hardening" not in p.name)
 for src in corner_libs:
     corner = src.stem[len("own_"):]
     (OUT / f"own_hardening_{corner}.lib").write_text(

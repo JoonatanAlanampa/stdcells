@@ -5,3 +5,5 @@ out/*.yslog
 out/*.out
 __pycache__/
 harden/runs/
+# stray foundry PDK artifacts copied in by local magic runs (zero-foundry policy)
+flow/sky130.tech

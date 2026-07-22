@@ -2,10 +2,10 @@
 
 Measured per cell, by us, from transistor-level transient simulation:
   - input capacitance per pin (charge integration)
-  - NLDM delay (50/50) + output transition (20/80) tables, 3 slews x 3
-    loads, both edges, per input arc
+  - NLDM delay (50/50) + output transition (20/80) tables, per input arc
+  - internal_power (rise_power/fall_power) per input arc  [lib-v1.2]
   - DFF: CLK->Q tables, setup and hold by bisection
-  - leakage (all-inputs-low state)
+  - per-state leakage (all 2^N input states)              [lib-v1.2]
 
 MULTI-PVT (lib-v1.1). Everything is re-measured at each of the three corners
 the sky130A flow signs off on, so the timing views actually DIFFER:
@@ -21,6 +21,19 @@ byte-identical, so a measured-vs-predicted gap had no error bar to be judged
 against and could not be attributed to process, temperature or voltage. A
 corner spread turns that comparison into a real measurement.
 
+lib-v1.2 closes the two gaps research/internal-power.md ranked highest:
+  * grid: a fast-slew (20 ps) and a low-load (2 fF) point are prepended so the
+    ring's operating point (~50 ps slew, ~3.6 fF load) is INTERIOR to the NLDM
+    box. At the old LOADS[0]=5 fF the RO load fell BELOW the grid and OpenSTA
+    extrapolated the ring-stage delay with unbounded error -- the one gap that
+    actually moves the silicon prediction (temperature is quoted as a band in
+    the vertical-slice run, not baked in here; NOR2 is the temp-exposed cell).
+  * power: internal_power (dynamic switching energy, pJ) and per-state
+    leakage_power(when) are now emitted for the combinational cells -- ahead of
+    CharLib, which emits neither. The DFF's internal power and per-state
+    leakage are deferred (its state includes internal storage nodes); it keeps
+    valid timing plus a single averaged cell_leakage_power.
+
 The PVT is carried in module globals that the netlist builders read at call
 time, so set_pvt() is all it takes -- no netlist code is PVT-aware.
 """
@@ -32,9 +45,21 @@ import numpy as np
 from common import MODELS, OUT, VDD, TEMP, run_ngspice, parse_meas
 from cells import LIBRARY
 
-SLEWS = [0.05e-9, 0.3e-9, 1.5e-9]      # input transition, 20-80, seconds
-LOADS = [5e-15, 25e-15, 100e-15]       # output load, farads
+SLEWS = [0.02e-9, 0.05e-9, 0.3e-9, 1.5e-9]   # input transition, 20-80, seconds
+LOADS = [2e-15, 5e-15, 25e-15, 100e-15]      # output load, farads
 T_END = 40e-9
+
+TEMPLATE = f"tbl{len(SLEWS)}{len(LOADS)}"     # NLDM (delay / output transition)
+PTEMPLATE = f"pwr{len(SLEWS)}{len(LOADS)}"    # internal_power (input_transition)
+# ngspice reports the supply-source branch current NEGATIVE when the cell draws
+# current, so the charge delivered by the supply is -integ i(vdd). Validated:
+# with this sign an output-RISE window yields +C*Vdd^2 of supply energy and an
+# output-FALL window ~0 (tools/validate_power.py).
+ISIGN = -1.0
+# hold the CORNER SPREAD summary at a fixed (0.3 ns, 25 fF) operating point so
+# the printed number stays comparable to what lib-v1.1 recorded even though
+# grid points were added around it.
+REP_S, REP_L = SLEWS.index(0.3e-9), LOADS.index(25e-15)
 
 # (liberty/PDK corner name, model section, volts, celsius)
 PVTS = [
@@ -67,10 +92,20 @@ def noncontrolling(cell, active_pin):
 
 
 def arc_run(cell, pin, slew, load, tag):
-    """One transient: pin pulses low-high-low; measure both arcs."""
+    """One transient: pin pulses low-high-low; measure both arcs.
+
+    Beyond the delay/transition arcs, integrate the supply-source current over
+    a window bracketing each input edge (qir = input-rise window, qif =
+    input-fall window). emit_liberty turns those into internal_power: the
+    supply energy per transition minus the 1/2 C*Vdd^2 the power tool already
+    accounts as switching energy. The integration is free -- same transient.
+    """
     others = noncontrolling(cell, pin)
     src = [f"v{p} {p} 0 {v}" for p, v in others.items()]
     ramp = slew / 0.6                   # 20-80 -> 0-100 ramp time
+    t_fall = 2e-9 + ramp + 15e-9        # input falls here (pulse PW=15n)
+    w1a, w1b = 1.8e-9, t_fall - 2e-9    # input-rise window: ends before the fall
+    w2a, w2b = t_fall - 0.2e-9, T_END - 0.2e-9   # input-fall window: to run end
     net = f"""* {cell.name} arc {pin} slew={slew} load={load}
 {HDR}
 {cell.spice()}
@@ -87,6 +122,8 @@ meas tran tdr trig v({pin}) val={VDD/2} rise=1 targ v({cell.output}) val={VDD/2}
 meas tran tdf trig v({pin}) val={VDD/2} fall=1 targ v({cell.output}) val={VDD/2} cross=2
 meas tran trout1 trig v({cell.output}) val={0.2*VDD} cross=1 targ v({cell.output}) val={0.8*VDD} cross=1
 meas tran trout2 trig v({cell.output}) val={0.8*VDD} cross=2 targ v({cell.output}) val={0.2*VDD} cross=2
+meas tran qir integ i(vdd) from={w1a} to={w1b}
+meas tran qif integ i(vdd) from={w2a} to={w2b}
 .endc
 .end
 """
@@ -119,6 +156,8 @@ echo qin_meas = $&qin
 
 
 def leakage(cell):
+    """Single all-inputs-low leakage (watts). Used for the DFF, whose full
+    per-state leakage depends on internal storage nodes (deferred)."""
     src = [f"v{p} {p} 0 0" for p in cell.inputs]
     net = f"""* {cell.name} leakage
 {HDR}
@@ -136,6 +175,42 @@ echo ileak_meas = $&il
 """
     vals = parse_meas(run_ngspice(net, f"leak_{CORNER}_{cell.name}"))
     return vals.get("ileak_meas", 0.0) * VDD          # watts
+
+
+def leakage_states(cell):
+    """DC leakage in every input state -> [(when_expr, watts), ...].
+
+    research/internal-power.md §4: the single all-low measurement lands on an
+    inverter's LOW-leakage state and understates the average hd publishes by
+    ~27x (a 53x spread between an INV's two states). hd emits one
+    leakage_power(when) group per state and publishes cell_leakage_power as the
+    average; we do both. Combinational cells only -- inputs fully determine the
+    state, no internal nodes to precondition.
+    """
+    out = []
+    for bits in itertools.product((0, 1), repeat=len(cell.inputs)):
+        src = [f"v{p} {p} 0 {b * VDD}" for p, b in zip(cell.inputs, bits)]
+        tag = f"leak_{CORNER}_{cell.name}_{''.join(map(str, bits))}"
+        net = f"""* {cell.name} leakage state {bits}
+{HDR}
+{cell.spice()}
+vdd vdd 0 {VDD}
+vss vss 0 0
+{chr(10).join(src)}
+xdut {" ".join(cell.inputs + [cell.output])} vdd vss {cell.name}
+.control
+op
+let il = abs(i(vdd))
+echo ileak_meas = $&il
+.endc
+.end
+"""
+        vals = parse_meas(run_ngspice(net, tag))
+        w = vals.get("ileak_meas", 0.0) * VDD
+        when = "&".join((p if b else "!" + p)
+                        for p, b in zip(cell.inputs, bits))
+        out.append((when, w))
+    return out
 
 
 def _dff_edge(cell, slew, load, tag, rising):
@@ -232,15 +307,36 @@ meas tran qfin find v(Q) at={clk_edge + 5e-9}
     return hi
 
 
-def table(name, rows):
-    """rows[slew][load] -> liberty NLDM block (values in ns)."""
+def table(name, rows, template=None, scale=1e9):
+    """rows[slew][load] -> liberty NLDM block. scale converts the stored value
+    to the liberty unit (delay/transition: seconds->ns=1e9; power: already pJ,
+    scale=1)."""
+    template = template or TEMPLATE
     v = " \\\n           ".join(
-        '"' + ", ".join(f"{x*1e9:.5f}" for x in row) + '",' for row in rows)
-    return f"""        {name} (tbl33) {{
+        '"' + ", ".join(f"{x*scale:.5f}" for x in row) + '",' for row in rows)
+    return f"""        {name} ({template}) {{
           index_1("{', '.join(f'{s*1e9:.3f}' for s in SLEWS)}");
           index_2("{', '.join(f'{c*1e12:.3f}' for c in LOADS)}");
           values({v.rstrip(',')});
         }}"""
+
+
+def internal_power(a, inverting):
+    """Return (rise_power, fall_power) tables in pJ for one input arc.
+
+    E_internal per transition = (energy the supply delivered over that arc's
+    window) - 1/2 C*Vdd^2 (the switching half the power tool computes itself).
+    On an output RISE the supply term ~= C*Vdd^2 so rise_power stays positive;
+    on an output FALL the supply term ~=0 so fall_power is negative and
+    load-proportional -- the shape the Liberty RM's own example ships and
+    sky130_fd_sc_hd reproduces. Negatives are correct; do not clamp.
+    """
+    q_outrise = a["qif" if inverting else "qir"]   # arc that makes output rise
+    q_outfall = a["qir" if inverting else "qif"]
+    half_cv2 = np.array([[0.5 * c * VDD ** 2 for c in LOADS] for _ in SLEWS])
+    rise_pj = (ISIGN * VDD * q_outrise - half_cv2) * 1e12
+    fall_pj = (ISIGN * VDD * q_outfall - half_cv2) * 1e12
+    return rise_pj, fall_pj
 
 
 # real layout areas override the projected site model where cells exist
@@ -253,15 +349,20 @@ if _ar.exists():
             c.area = real[c.name]
 
 def characterize_all():
-    """Measure every cell at the PVT currently set. Returns the lib_cells list."""
+    """Measure every cell at the PVT currently set. Returns the lib_cells list.
+
+    lib_cells entries are (cell, caps, leak, data) where leak is
+    {"avg": watts, "states": [(when, watts), ...]} -- states is empty for the
+    DFF (single averaged value) and populated for combinational cells.
+    """
     print(f"characterizing {len(LIBRARY)} cells at {CORNER} "
           f"({VDD} V, {TEMP} C) ...")
     lib_cells = []
     for cell in LIBRARY:
         caps = {p: input_cap(cell, p) for p in cell.inputs}
-        leak = leakage(cell)
         if cell.clocked:
-            tables = {k: np.zeros((3, 3))
+            leak = {"avg": leakage(cell), "states": []}
+            tables = {k: np.zeros((len(SLEWS), len(LOADS)))
                       for k in ("tcqr", "tcqf", "trq1", "trq2")}
             for (i, s), (j, c) in itertools.product(enumerate(SLEWS),
                                                     enumerate(LOADS)):
@@ -270,13 +371,17 @@ def characterize_all():
                     tables[k][i, j] = m.get(k, np.nan)
             tsu = dff_setup(cell)
             lib_cells.append((cell, caps, leak, {"clkq": tables, "setup": tsu}))
-            print(f"  {cell.name}: clk-q {tables['tcqr'][1,1]*1e12:.0f} ps @mid, "
-                  f"setup {tsu*1e12:.0f} ps, cin(D) {caps['D']*1e15:.2f} fF")
+            print(f"  {cell.name}: clk-q {tables['tcqr'][REP_S, REP_L]*1e12:.0f} ps, "
+                  f"setup {tsu*1e12:.0f} ps, cin(D) {caps['D']*1e15:.2f} fF, "
+                  f"leak {leak['avg']*1e12:.1f} pW")
         else:
+            states = leakage_states(cell)
+            leak = {"avg": sum(w for _, w in states) / len(states),
+                    "states": states}
             arcs = {}
             for pin in cell.inputs:
-                t = {k: np.zeros((3, 3))
-                     for k in ("tdr", "tdf", "trout1", "trout2")}
+                t = {k: np.zeros((len(SLEWS), len(LOADS)))
+                     for k in ("tdr", "tdf", "trout1", "trout2", "qir", "qif")}
                 for (i, s), (j, c) in itertools.product(enumerate(SLEWS),
                                                         enumerate(LOADS)):
                     m = arc_run(cell, pin, s, c,
@@ -285,10 +390,10 @@ def characterize_all():
                         t[k][i, j] = m.get(k, np.nan)
                 arcs[pin] = t
             lib_cells.append((cell, caps, leak, arcs))
-            mid = arcs[cell.inputs[0]]["tdr"][1, 1]
-            print(f"  {cell.name}: tp {mid*1e12:.0f} ps @mid, "
+            mid = arcs[cell.inputs[0]]["tdr"][REP_S, REP_L]
+            print(f"  {cell.name}: tp {mid*1e12:.0f} ps @rep, "
                   f"cin {caps[cell.inputs[0]]*1e15:.2f} fF, "
-                  f"leak {leak*1e12:.1f} pW")
+                  f"leak {leak['avg']*1e12:.1f} pW (avg of {len(states)} states)")
     return lib_cells
 
 
@@ -308,8 +413,13 @@ def emit_liberty(lib_cells):
   slew_lower_threshold_pct_fall : 20; slew_upper_threshold_pct_fall : 80;
   input_threshold_pct_rise : 50; input_threshold_pct_fall : 50;
   output_threshold_pct_rise : 50; output_threshold_pct_fall : 50;
-  lu_table_template (tbl33) {{
+  lu_table_template ({TEMPLATE}) {{
     variable_1 : input_net_transition; variable_2 : total_output_net_capacitance;
+    index_1("{', '.join(f'{s*1e9:.3f}' for s in SLEWS)}");
+    index_2("{', '.join(f'{c*1e12:.3f}' for c in LOADS)}");
+  }}
+  lu_table_template ({PTEMPLATE}) {{
+    variable_1 : input_transition_time; variable_2 : total_output_net_capacitance;
     index_1("{', '.join(f'{s*1e9:.3f}' for s in SLEWS)}");
     index_2("{', '.join(f'{c*1e12:.3f}' for c in LOADS)}");
   }}
@@ -317,7 +427,10 @@ def emit_liberty(lib_cells):
     for cell, caps, leak, data in lib_cells:
         L.append(f"  cell ({cell.name}) {{")
         L.append(f"    area : {cell.area};")
-        L.append(f"    cell_leakage_power : {leak*1e9:.6f};")
+        L.append(f"    cell_leakage_power : {leak['avg']*1e9:.6f};")
+        for when, w in leak["states"]:
+            L.append(f'    leakage_power () {{ when : "{when}"; '
+                     f'value : {w*1e9:.6f}; }}')
         if cell.clocked:
             L.append("    ff (IQ, IQN) { next_state : \"D\"; clocked_on : \"CLK\"; }")
             tsu = data["setup"] * 1e9
@@ -344,17 +457,21 @@ def emit_liberty(lib_cells):
             L.append(f"    pin ({cell.output}) {{ direction : output; "
                      f"function : \"{cell.function}\";")
             L.append(f"      max_capacitance : {LOADS[-1]*1e12:.3f}; max_transition : {SLEWS[-1]*1e9:.3f};")
+            inverting = cell.function.startswith("(!")
             for p in cell.inputs:
                 a = data[p]
-                inverting = cell.function.startswith("(!")
                 cr = a["tdf" if inverting else "tdr"]
                 cf = a["tdr" if inverting else "tdf"]
+                rise_pj, fall_pj = internal_power(a, inverting)
                 L.append(f"""      timing () {{ related_pin : "{p}";
             timing_sense : {"negative_unate" if inverting else "positive_unate"};
     {table("cell_rise", cr)}
     {table("rise_transition", a["trout1"])}
     {table("cell_fall", cf)}
-    {table("fall_transition", a["trout2"])} }}""")
+    {table("fall_transition", a["trout2"])} }}
+      internal_power () {{ related_pin : "{p}";
+    {table("rise_power", rise_pj, PTEMPLATE, 1.0)}
+    {table("fall_power", fall_pj, PTEMPLATE, 1.0)} }}""")
             L.append("    }")
         L.append("  }")
     L.append("}")
@@ -364,8 +481,13 @@ def emit_liberty(lib_cells):
 def check_no_nan(lib_cells):
     bad = []
     for cell, caps, leak, data in lib_cells:
-        tabs = data["clkq"].values() if "setup" in data else \
-            [t for arc in data.values() for t in arc.values()]
+        if "setup" in data:
+            tabs = list(data["clkq"].values())
+        else:
+            # only the timing tables gate the run; a stray power integral going
+            # NaN should not abort characterization (it is reported, not signed)
+            tabs = [arc[k] for arc in data.values()
+                    for k in ("tdr", "tdf", "trout1", "trout2")]
         if any(np.isnan(t).any() for t in tabs):
             bad.append(cell.name)
     if bad:
@@ -390,14 +512,14 @@ def run(wanted):
             # copies) is untouched by this change
             (OUT / "own.lib").write_text(emit_liberty(cells_data))
         summary[corner] = {
-            c.name: (d["clkq"]["tcqr"][1, 1] if c.clocked
-                     else d[c.inputs[0]]["tdr"][1, 1], leak)
+            c.name: (d["clkq"]["tcqr"][REP_S, REP_L] if c.clocked
+                     else d[c.inputs[0]]["tdr"][REP_S, REP_L], leak["avg"])
             for c, caps, leak, d in cells_data}
         print(f"wrote {OUT / f'own_{corner}.lib'}\n")
 
     if len(summary) > 1:
         print("=" * 66)
-        print("CORNER SPREAD — mid-slew/mid-load delay, and leakage")
+        print("CORNER SPREAD — (0.3 ns, 25 fF) delay, and total leakage")
         print("=" * 66)
         names = sorted({n for s in summary.values() for n in s})
         hdr = "".join(f"{c:>16s}" for c in summary)

@@ -29,11 +29,20 @@ OUT = Path(__file__).resolve().parents[1] / "out"
 # a delay number inside an NLDM table
 NUM = re.compile(r"-?\d+\.\d+")
 
+# Only the NLDM timing tables define the corner spread this test is about.
+# lib-v1.2 added internal_power (rise_power/fall_power) tables whose values
+# cross zero -- feeding those to the |y/x - 1| metric below makes it explode
+# to meaningless thousands of percent, and power spread is not what the
+# lib-v1.0 single-PVT bug was about. Fingerprint delay/transition only.
+TIMING = re.compile(
+    r"(?:cell_rise|cell_fall|rise_transition|fall_transition)\s*\([^)]*\)\s*"
+    r"\{[^{}]*?values\(([^;]*)\)", re.S)
+
 
 def lib_fingerprint(path):
-    """All table values in a liberty file, as a tuple."""
+    """The NLDM timing-table values in a liberty file, as a tuple."""
     vals = []
-    for m in re.finditer(r"values\(([^;]*)\)", path.read_text(), re.S):
+    for m in TIMING.finditer(path.read_text()):
         vals.extend(float(x) for x in NUM.findall(m.group(1)))
     return tuple(vals)
 
@@ -72,7 +81,15 @@ def main():
     base = names[0]
     worst = 0.0
     for n in names[1:]:
-        rel = max(abs(y / x - 1) for x, y in zip(fps[base], fps[n]) if x)
+        # ignore near-zero denominators: at the slowest-slew / lightest-load
+        # grid corner the 50-50 delay is a few ps or slightly negative (the
+        # asymmetric cells trip before the input midpoint -- a pre-existing
+        # property, present in lib-v1.0/v1.1 too), and y/x - 1 there explodes
+        # without meaning. Floor at 5 ps keeps the metric on the delays that
+        # actually carry the corner spread.
+        rels = [abs(y / x - 1) for x, y in zip(fps[base], fps[n])
+                if abs(x) > 5e-3]
+        rel = max(rels) if rels else 0.0
         worst = max(worst, rel)
         print(f"  max |{n} / {base} - 1| = {100*rel:.1f}%")
     if worst < 0.05:

@@ -75,7 +75,8 @@ jobs:
               m = re.search(r"=== NETGEN-LVS " + re.escape(dev) +
                             r" ===(.*?)--- END-LVS-OUT " + re.escape(dev), t, re.S)
               seg = m.group(1) if m else ""
-              return bool(re.search(r"Circuits match uniquely|networks match", seg, re.I)), seg
+              return bool(re.search(r"match uniquely|Circuits match|networks match",
+                                    seg, re.I)), seg
 
           ok = True
           for dev, w in (("nfet_w250", 0.25), ("nfet_w420", 0.42)):
@@ -94,6 +95,10 @@ jobs:
                     f"W(s) extracted={wvals}  LVS-match={lvsm}")
               for l in dev_lines[:8]:
                   print("     ", l)
+              tail = [l for l in _seg.strip().splitlines()
+                      if l.strip() and "No property" not in l][-6:]
+              for l in tail:
+                  print("     netgen|", l.strip())
 
               if dev == "nfet_w250":
                   if not has_dt2:

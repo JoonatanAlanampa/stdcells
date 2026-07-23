@@ -113,13 +113,15 @@ def build(W):
     lib.write_gds(fname)
 
     # netgen LVS reference: the device magic SHOULD extract -- one nfet_01v8
-    # at the drawn W/L, terminals D/G/S + substrate. LVS proves the tools bind
-    # it fine (device identity + params); the DRC verdict is separate.
+    # at the drawn W/L, terminals D/G/S + substrate VSUBS. Mirror magic's exact
+    # ext2spice-lvs output shape: a PORTLESS subckt with BARE (um) w/l, so
+    # netgen compares two structurally identical cells. LVS proves the tools
+    # bind it fine (device identity + params); the DRC verdict is separate.
     with open(f"{name}_ref.spice", "w") as fp:
         fp.write(f"* reference: single nfet_01v8, W={W}um L={L}um\n"
-                 f".subckt {name} D G S VSUBS\n"
+                 f".subckt {name}\n"
                  f"X0 D G S VSUBS sky130_fd_pr__nfet_01v8 "
-                 f"w={W:g}u l={L:g}u\n"
+                 f"w={W:g} l={L:g}\n"
                  f".ends\n")
 
     (x0, y0), (x1, y1) = c.bounding_box()

@@ -118,3 +118,34 @@ bin — continuous *or* `special_` — exists (`model_bins.py nfet_01v8 0.25 0.1
 sanity-check the trend against the nearest in-bin device (W = 0.36). This is the
 sharpest test of the v3 thesis: a geometry BSIM literally has no model for. Keep
 the longer-L NMOS as the scope-(a) leakage lever (in-envelope, BSIM-characterized).
+
+## PHASE 1 RESULT (2026-07-23) — off-bin target CLOSED; all three exotic targets closed
+The gate-check ran (flow/offbin/, offbin.yml CI green, see offbin/RESULT.md).
+**The pinned off-bin W=0.25 µm rectangular NMOS is a DEAD-END** — magic
+`diff/tap.2` "Transistor width < 0.42 µm" (0.36 special_ in a std cell) FORBIDS
+it (10 viol incl. it; W=0.42 control clean), and BSIM `ngspice` REFUSES it
+("could not find a valid modelname"). Both decks' KLayout runs passed it —
+KLayout has no transistor-width rule (only `difftap.1` = 0.15 µm plain-diff
+*shape*). magic extracts + netgen-LVS-matches both as `nfet_01v8` at the drawn
+W/L — the tools are fine, the RULES forbid it. Same class as annular (poly.11).
+- **Root correction:** the Phase-0 "devphys zone W ∈ [0.15, 0.36)" was an
+  ARTIFACT of using the plain-diff floor (0.15) as the transistor floor. The real
+  gated-FET floor is magic `diff/tap.2` (0.42 std / 0.36 special_), which
+  COINCIDES with the BSIM model floor — for ALL four core flavors
+  (`model_bins.py --summary`, corrected). => **No manufacturable-but-unmodeled
+  rectangular transistor exists**; the "sharpest test" device is un-buildable.
+- **So all THREE "devphys where BSIM stops on a custom geometry" targets are
+  CLOSED**: narrow-width (no silicon effect), annular (poly.11), off-bin
+  rectangular (diff/tap.2 = BSIM floor). They close for the same structural
+  reason: **the foundry characterizes exactly what it lets you build**, so "where
+  BSIM stops" is always "where you cannot build."
+- **REFRAME (v3's actual, deliverable value):** devphys's silicon-calibrated
+  physics chain (stages 4–5) as an INDEPENDENT from-physics characterization /
+  cross-check of the OWN STANDARD (rectangular, manufacturable) cells — NOT a
+  gap-filler for exotic geometries. Demonstrated (devphys_offbin.py): devphys
+  reproduces BSIM Ion at manufacturable widths within +0.7 % (W=1.0) … +8.8 %
+  (W=0.42 floor; the residual is the ~1/W S/D-resistance the 2D scalar-W model
+  over-predicts — devphys stage 4d models it). Scope (a) = the real v3 path;
+  scope (b) exotic geometries = closed. Phase 2 (a small v3 library on validated
+  custom RECTANGULAR devices, re-harden vs lib-v1.x) stands, on the cross-check
+  footing — NOT on a "BSIM can't" necessity claim.

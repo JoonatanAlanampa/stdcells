@@ -17,9 +17,14 @@ enough). Read-only; touches no repo.
 
 flavors: nfet_01v8  pfet_01v8  nfet_01v8_lvt  pfet_01v8_hvt  pfet_01v8_mvt
 
-Part of the v3 leg (see V3-PLAN.md, Phase 0). The "devphys zone" it computes
-(W in [0.15, 0.36) um for nfet, where no BSIM bin exists) is the one regime
-where a v3 device genuinely needs devphys TCAD rather than stock ngspice+BSIM.
+Part of the v3 leg (see V3-PLAN.md, Phase 0). NOTE (CORRECTED 2026-07-23,
+flow/offbin/RESULT.md): OFF-BIN here means "no BSIM model", NOT "manufacturable
+but unmodeled". magic's transistor-width rule diff/tap.2 (0.42 um std / 0.36 um
+special_) forbids a gated FET below the BSIM floor, so the BSIM floor and the
+DRC transistor floor COINCIDE — there is no manufacturable rectangular-FET
+geometry that needs devphys to fill a coverage gap. `--summary` prints this
+reconciliation; the earlier "devphys zone = [0.15, 0.36)" (from the plain-diff
+floor) was wrong.
 """
 import re
 import sys
@@ -92,7 +97,22 @@ def envelope(flavor):
 # of all installed BSIM models still floors at W ~ 0.36 um.
 SPECIAL = {"nfet_01v8": "special_nfet_01v8",
            "pfet_01v8_hvt": "special_pfet_01v8_hvt"}
-DRC_WIDTH_FLOOR = 0.15   # difftap.1 (0.14 inside areaid.ce)
+
+# CORRECTED 2026-07-23 (offbin gate-check, flow/offbin/RESULT.md). The relevant
+# DRC floor for a GATED TRANSISTOR is NOT difftap.1 (0.15 um) — that rule is the
+# min width of a plain diffusion/tap SHAPE. magic sky130A.tech enforces a
+# separate transistor-width rule, diff/tap.2:
+#     edge4way *poly allfetsstd     420  -> W >= 0.42 um (standard nfet/pfet)
+#     edge4way *poly allfetsspecial 360  -> W >= 0.36 um (special_ dev, in std cell)
+# The KLayout manufacturing deck (sky130A_mr.drc) has NO transistor-width rule,
+# so it passes a W < 0.42 gated FET — but magic (the foundry rule) forbids it.
+# => the DRC transistor floor (~0.36-0.42) COINCIDES with the BSIM model floor
+# (~0.36), so there is NO manufacturable-but-unmodeled rectangular-transistor
+# zone. The old "devphys zone = [0.15, 0.36)" was an artifact of using the
+# plain-diff floor (0.15). Proven in CI: offbin.yml (W=0.25 fails diff/tap.2).
+PLAIN_DIFF_FLOOR = 0.15         # difftap.1 (0.14 inside areaid.ce) — a SHAPE rule
+FET_FLOOR_STD = 0.42            # magic diff/tap.2 allfetsstd — a gated-FET rule
+FET_FLOOR_SPECIAL = 0.36        # magic diff/tap.2 allfetsspecial (in std cell)
 
 
 def special_env(flavor):
@@ -148,21 +168,27 @@ def summary():
               f"{', '.join(f'{x:g}' for x in e['W_edges'][:16])}"
               f"{' ...' if len(e['W_edges']) > 16 else ''}")
     print()
-    print(f"DRC width floor = {DRC_WIDTH_FLOOR} um (0.14 inside areaid.ce). "
-          "Where BSIM stops = the 'devphys zone':")
+    print("Transistor-width DRC floor (magic diff/tap.2): "
+          f"{FET_FLOOR_STD} um standard nfet/pfet, {FET_FLOOR_SPECIAL} um special_ "
+          "in a std cell.")
+    print(f"(The KLayout deck only checks the {PLAIN_DIFF_FLOOR} um plain-diff SHAPE "
+          "rule difftap.1 -- it does NOT gate transistor width.)")
+    print("Reconciliation -- is there a manufacturable-but-unmodeled FET width?")
     for fl in FLAVORS:
         try:
             wfloor = envelope(fl)["W"][0]
         except FileNotFoundError:
             continue
         sp = special_env(fl)
-        spn = (f"special_ adds only W[{sp[1]:.3g},{sp[2]:.3g}]@L[{sp[3]:.3g},"
-               f"{sp[4]:.3g}] -- does NOT lower the floor" if sp
-               else "no special_ device")
-        print(f"  {fl:16s} BSIM W floor {wfloor:.3g} um; {spn}")
-        if wfloor > DRC_WIDTH_FLOOR:
-            print(f"{'':18s}-> devphys zone (DRC-legal, uncharacterized): "
-                  f"W in [{DRC_WIDTH_FLOOR}, {wfloor:.3g}) um")
+        spn = (f"special_ W[{sp[1]:.3g},{sp[2]:.3g}]" if sp else "no special_ dev")
+        fet_floor = FET_FLOOR_SPECIAL if sp else FET_FLOOR_STD
+        verdict = ("NONE (floors coincide)" if wfloor <= fet_floor + 1e-9
+                   else f"W in [{fet_floor}, {wfloor:.3g}) um")
+        print(f"  {fl:16s} BSIM W floor {wfloor:.3g} um; magic FET floor "
+              f"{fet_floor} um ({spn}) -> unmodeled-but-legal FET: {verdict}")
+    print("=> devphys is NOT needed to fill a rectangular-transistor coverage gap "
+          "(there is none);\n   its value is an independent physics CROSS-CHECK on "
+          "manufacturable cells (see flow/offbin/RESULT.md).")
 
 
 def coverage(flavor):

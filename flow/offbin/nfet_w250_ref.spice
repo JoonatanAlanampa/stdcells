@@ -1,0 +1,4 @@
+* reference: single nfet_01v8, W=0.25um L=0.15um
+.subckt nfet_w250 D G S VSUBS
+X0 D G S VSUBS sky130_fd_pr__nfet_01v8 w=0.25u l=0.15u
+.ends

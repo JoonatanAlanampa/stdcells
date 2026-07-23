@@ -1,0 +1,135 @@
+name: offbin-gatecheck
+
+# v3 off-bin gate-check: push the hand-drawn RECTANGULAR nfet devices
+# (W=0.25 um off-bin, W=0.42 um in-bin control) through magic DRC + extract +
+# netgen LVS and report the verdict on the real transistor-width question the
+# KLayout manufacturing deck cannot see (magic diff/tap.2 "Transistor width <
+# 0.42 um"). Mirrors annular.yml; reuses the librelane container + cached PDK.
+# Additive; no library files involved.
+
+on:
+  push:
+    paths:
+      - "flow/offbin/**"
+      - ".github/workflows/offbin.yml"
+  workflow_dispatch:
+
+jobs:
+  gatecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache sky130 PDK
+        uses: actions/cache@v4
+        with:
+          path: pdk-root
+          key: pdk-sky130-${{ runner.os }}-v1
+
+      - name: Magic DRC + extract + netgen LVS
+        run: |
+          mkdir -p pdk-root
+          docker run --rm \
+            -v "$PWD":/work -w /work \
+            -e PDK_ROOT=/work/pdk-root \
+            --entrypoint bash \
+            ghcr.io/librelane/librelane:3.0.5 \
+            -c "set -e
+                MAGICRC=\$(find /work/pdk-root -name sky130A.magicrc | head -1)
+                test -n \"\$MAGICRC\" || { echo 'no sky130A.magicrc in PDK cache — run harden/magic-views once to warm it'; exit 1; }
+                export PDK_ROOT=\${MAGICRC%/sky130A/libs.tech/magic/sky130A.magicrc}
+                echo \"PDK_ROOT=\$PDK_ROOT\"
+                magic -dnull -noconsole -rcfile \"\$MAGICRC\" flow/offbin/extract_offbin.tcl
+                NETGEN_SETUP=\$PDK_ROOT/sky130A/libs.tech/netgen/sky130A_setup.tcl
+                for dev in nfet_w250 nfet_w420; do
+                  echo \"=== NETGEN-LVS \$dev ===\"
+                  netgen -batch lvs \"\$dev.spice \$dev\" \"flow/offbin/\${dev}_ref.spice \$dev\" \"\$NETGEN_SETUP\" \${dev}_lvs.out || true
+                  echo \"--- LVS-OUT \$dev ---\"; cat \${dev}_lvs.out 2>/dev/null || echo 'no lvs out'; echo \"--- END-LVS-OUT \$dev ---\"
+                done" \
+            | tee offbin_report.txt
+
+      - name: Verdict
+        run: |
+          sudo chown -R "$USER" . || true
+          python3 - << 'EOF'
+          import re, sys
+          t = open("offbin_report.txt").read()
+
+          def block(marker_begin, marker_end, dev):
+              m = re.search(re.escape(marker_begin) + r"\s+" + re.escape(dev) +
+                            r"(.*?)" + re.escape(marker_end) + r"\s+" + re.escape(dev),
+                            t, re.S)
+              return m.group(1) if m else ""
+
+          def drc_count(dev):
+              m = re.search(r"MAGIC-DRC-COUNT\s+" + re.escape(dev) + r"\s+(\d+)", t)
+              return int(m.group(1)) if m else None
+
+          def netlist(dev):
+              return block("NETLIST-BEGIN", "NETLIST-END", dev)
+
+          def why(dev):
+              return block("DRC-WHY-BEGIN", "DRC-WHY-END", dev)
+
+          def lvs_match(dev):
+              m = re.search(r"=== NETGEN-LVS " + re.escape(dev) +
+                            r" ===(.*?)--- END-LVS-OUT " + re.escape(dev), t, re.S)
+              seg = m.group(1) if m else ""
+              return bool(re.search(r"Circuits match uniquely|networks match", seg, re.I)), seg
+
+          ok = True
+          for dev, w in (("nfet_w250", 0.25), ("nfet_w420", 0.42)):
+              nl, wy = netlist(dev), why(dev)
+              cnt = drc_count(dev)
+              has_dt2 = "diff/tap.2" in wy or "Transistor width" in wy
+              # extracted device type + W
+              dev_lines = [l.strip() for l in nl.splitlines()
+                           if re.search(r"nfet|sky130_fd_pr__|^[XM]\d", l)
+                           and not l.strip().startswith("*")]
+              wvals = re.findall(r"\b[wW]\s*=\s*([0-9.eEpu+-]+)", nl)
+              is_nfet = bool(re.search(r"nfet_01v8", nl))
+              lvsm, _seg = lvs_match(dev)
+              print(f"\n[{dev}] W={w}um  magic-DRC-count={cnt}  "
+                    f"has diff/tap.2={has_dt2}  extracts nfet_01v8={is_nfet}  "
+                    f"W(s) extracted={wvals}  LVS-match={lvsm}")
+              for l in dev_lines[:8]:
+                  print("     ", l)
+
+              if dev == "nfet_w250":
+                  if not has_dt2:
+                      print("  !! EXPECTED diff/tap.2 on the W=0.25 device — not found"); ok = False
+                  if not is_nfet:
+                      print("  !! expected magic to extract an nfet_01v8"); ok = False
+              else:  # nfet_w420
+                  if has_dt2:
+                      print("  !! W=0.42 (the diff/tap.2 std floor) should NOT flag "
+                            "transistor width — it did"); ok = False
+                  if not is_nfet:
+                      print("  !! expected magic to extract an nfet_01v8"); ok = False
+
+          print("\n" + "="*70)
+          if ok:
+              print("VERDICT: REPRODUCED. magic EXTRACTS both as nfet_01v8 (tools are\n"
+                    "fine), but magic diff/tap.2 FORBIDS the W=0.25 rectangular\n"
+                    "transistor (< 0.42 um std floor) while passing W=0.42 — the SAME\n"
+                    "class of dead-end poly.11 was for annular. KLayout passed BOTH.\n"
+                    "=> No manufacturable-but-unmodeled rectangular transistor exists:\n"
+                    "the BSIM model floor and the magic transistor floor coincide.")
+          else:
+              print("VERDICT: the expected pattern did NOT reproduce — read "
+                    "offbin_report.txt (artifact).")
+          sys.exit(0 if ok else 1)
+          EOF
+
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: offbin-gatecheck
+          path: |
+            offbin_report.txt
+            nfet_w250.spice
+            nfet_w420.spice
+            nfet_w250.ext
+            nfet_w420.ext
+          if-no-files-found: warn

@@ -149,3 +149,34 @@ W/L — the tools are fine, the RULES forbid it. Same class as annular (poly.11)
   scope (b) exotic geometries = closed. Phase 2 (a small v3 library on validated
   custom RECTANGULAR devices, re-harden vs lib-v1.x) stands, on the cross-check
   footing — NOT on a "BSIM can't" necessity claim.
+
+## PHASE 2 RESULT (2026-07-24) — delivered on the cross-check footing (flow/v3/RESULT.md)
+Phase 2 executed as the reframe, NOT as an hvt cell set. Three parts:
+- **The suggested vehicle is a 4th dead-end.** `flow/v3/longL_gate.py` (BSIM):
+  a longer-L "geometric-hvt" NMOS gives NO leakage win on sky130 — DIBL falls
+  with L but the halo/RSCE implants lower Vt by the same amount, so **Ioff is
+  flat at 25 °C** (~1.9 pA) and Ion/Ioff only worsens; at 100 °C the best step
+  is a marginal ×1.09. Longer-L joins narrow-width / annular / off-bin as the
+  4th closed "geometric leakage control" target (same structural cause: the
+  halo engineering flattens leakage vs geometry). The other named lever,
+  STACKING, IS real (3.5× less Ioff @100 °C) but hot-corner-only and already
+  used in NAND2/NOR2 → not a new-cell opportunity. Building longer-L cells would
+  also need a full per-cell hand-redraw (shared N/P poly gate in layout.py) for
+  a strictly-worse library.
+- **The real deliverable — devphys cross-checks the OWN NMOS.**
+  `flow/v3/crosscheck_devices.py`: devphys stages 4c/4d (TCAD, silicon-calibrated,
+  L=0.15) vs BSIM on nfet_01v8 W=0.65 → **Ion agrees +4.7 %** (309 vs 295 µA)
+  from fully independent physics. Honest gaps reported: linear +13 % (Rsd
+  mobility roll-off), DIBL +46 % (2D halo proxy). **PMOS (pfet W=1.0) deferred**
+  to the devphys session's in-flight stage-8 (pfet_short_results.npz absent);
+  we do not run/edit devphys.
+- **Cross-checked liberty + re-harden.** `flow/v3/xcheck_liberty.py` scales the
+  fall (NMOS) arcs of own.lib by 1/k_N=0.955 → `out/own_devphys_xcheck.lib`
+  (a first-order device-drive sensitivity view, rise/PMOS left on BSIM).
+  `flow/v3/reharden_compare.py`: CORDIC-1 synthesizes to an **IDENTICAL** gate
+  netlist / cells (1805) / area (9913 µm²) under both → same silicon shape; the
+  only PPA delta is the −4.5 % fall-path timing band. **own physics → own cells
+  → silicon, cross-checked.**
+- NOT touched: layout.py / make_dff.py (Codex geom-pin @2718d05 stays valid).
+- Continuation when devphys stage-8 lands: add the PMOS half (k_P), optionally
+  re-run the cross-checked liberty with both device ratios.

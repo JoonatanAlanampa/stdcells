@@ -47,6 +47,24 @@ data, so both are emitted as measured. They are confined to light-load / fast-
 cell / slow-input entries the design never signs off on; load-monotonicity -- the
 property STA leans on for a fixed driver -- holds everywhere. flow/check_monotonic.py
 asserts that load-monotonicity (a regression guard) and reports the slew dips.
+
+lib-v1.4 FIXES defect M11: every output-transition table was measured by
+CROSSING ORDINAL rather than by direction, so on the five inverting cells
+(INV_X1/X2/X4, NAND2_X1, NOR2_X1) the two tables came out negative AND
+exchanged -- `rise_transition` carried minus the fall time and vice versa.
+The magnitudes were right; the labels were not. Downstream: OpenSTA clamps a
+negative transition to zero, so vertical-slice's entire signoff ran at ZERO
+input slew on 20 of its 21 driver rows and its "max slew violation count 0"
+asserted nothing. See arc_run for the mechanism and the measured numbers.
+
+Note what this says about the guards. Negative DELAYS are real here (the
+paragraph above) and are deliberately not clamped -- so "a negative number in
+the liberty" could never have been the alarm. The alarm that should have fired
+is check_monotonic.py, whose own docstring says a wrong-crossing regression
+"almost always breaks" load-monotonicity; it never saw this one because it
+parsed only cell_rise/cell_fall. It now covers the transition tables too and
+asserts their POSITIVITY -- the one thing that can be demanded of a transition
+time and cannot be demanded of a delay in this library.
 """
 import itertools
 import sys
@@ -110,6 +128,23 @@ def arc_run(cell, pin, slew, load, tag):
     input-fall window). emit_liberty turns those into internal_power: the
     supply energy per transition minus the 1/2 C*Vdd^2 the power tool already
     accounts as switching energy. The integration is free -- same transient.
+
+    lib-v1.4 / M11: the two OUTPUT-TRANSITION measurements are qualified by
+    DIRECTION (rise=1 / fall=1), not by crossing ordinal. `cross=N` counts the
+    Nth crossing of a level in EITHER direction, and both thresholds here sit
+    on the SAME node, so on an inverting cell -- whose output falls when the
+    input rises -- the output reaches 0.8*Vdd BEFORE 0.2*Vdd and (targ - trig)
+    came out NEGATIVE and, worse, attached to the opposite table. Measured at
+    (20 ps, 2 fF): INV_X1 shipped -11.30 ps as `rise_transition` when its true
+    rise is 20.97 ps, and NOR2_X1 shipped -15.68 ps for a true 50.87 ps rise
+    -- a 3.2x understatement on the cell with the weakest (stacked-PMOS)
+    pull-up. OpenSTA clamps negatives to zero, so vertical-slice signed off at
+    zero slew and its "max slew violations 0" was vacuous.
+
+    The delay measurements above keep `cross=`: their trig is direction-
+    qualified on the INPUT and their targ takes the ordered 1st/2nd output
+    event, so they select correctly. It is only the same-node pair that breaks.
+    The DFF path (_dff_edge) has always used rise=/fall= and was never wrong.
     """
     others = noncontrolling(cell, pin)
     src = [f"v{p} {p} 0 {v}" for p, v in others.items()]
@@ -131,8 +166,8 @@ cload {cell.output} 0 {load}
 run
 meas tran tdr trig v({pin}) val={VDD/2} rise=1 targ v({cell.output}) val={VDD/2} cross=1
 meas tran tdf trig v({pin}) val={VDD/2} fall=1 targ v({cell.output}) val={VDD/2} cross=2
-meas tran trout1 trig v({cell.output}) val={0.2*VDD} cross=1 targ v({cell.output}) val={0.8*VDD} cross=1
-meas tran trout2 trig v({cell.output}) val={0.8*VDD} cross=2 targ v({cell.output}) val={0.2*VDD} cross=2
+meas tran trise trig v({cell.output}) val={0.2*VDD} rise=1 targ v({cell.output}) val={0.8*VDD} rise=1
+meas tran tfall trig v({cell.output}) val={0.8*VDD} fall=1 targ v({cell.output}) val={0.2*VDD} fall=1
 meas tran qir integ i(vdd) from={w1a} to={w1b}
 meas tran qif integ i(vdd) from={w2a} to={w2b}
 .endc
@@ -392,7 +427,7 @@ def characterize_all():
             arcs = {}
             for pin in cell.inputs:
                 t = {k: np.zeros((len(SLEWS), len(LOADS)))
-                     for k in ("tdr", "tdf", "trout1", "trout2", "qir", "qif")}
+                     for k in ("tdr", "tdf", "trise", "tfall", "qir", "qif")}
                 for (i, s), (j, c) in itertools.product(enumerate(SLEWS),
                                                         enumerate(LOADS)):
                     m = arc_run(cell, pin, s, c,
@@ -474,12 +509,21 @@ def emit_liberty(lib_cells):
                 cr = a["tdf" if inverting else "tdr"]
                 cf = a["tdr" if inverting else "tdf"]
                 rise_pj, fall_pj = internal_power(a, inverting)
+                # NOTE the asymmetry with the two lines above, which is
+                # correct: the DELAY tables must be swapped for an inverting
+                # cell (its output RISES on the input's falling edge, so
+                # cell_rise comes from tdf), but the TRANSITION tables must
+                # NOT be, because trise/tfall are measured by output
+                # direction and so already mean output-rise / output-fall for
+                # either polarity. Before lib-v1.4 they were measured by
+                # crossing ordinal, which made them both negated AND swapped
+                # on inverting cells -- defect M11.
                 L.append(f"""      timing () {{ related_pin : "{p}";
             timing_sense : {"negative_unate" if inverting else "positive_unate"};
     {table("cell_rise", cr)}
-    {table("rise_transition", a["trout1"])}
+    {table("rise_transition", a["trise"])}
     {table("cell_fall", cf)}
-    {table("fall_transition", a["trout2"])} }}
+    {table("fall_transition", a["tfall"])} }}
       internal_power () {{ related_pin : "{p}";
     {table("rise_power", rise_pj, PTEMPLATE, 1.0)}
     {table("fall_power", fall_pj, PTEMPLATE, 1.0)} }}""")
@@ -498,7 +542,7 @@ def check_no_nan(lib_cells):
             # only the timing tables gate the run; a stray power integral going
             # NaN should not abort characterization (it is reported, not signed)
             tabs = [arc[k] for arc in data.values()
-                    for k in ("tdr", "tdf", "trout1", "trout2")]
+                    for k in ("tdr", "tdf", "trise", "tfall")]
         if any(np.isnan(t).any() for t in tabs):
             bad.append(cell.name)
     if bad:

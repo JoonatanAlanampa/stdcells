@@ -212,6 +212,49 @@ characterized honestly, not hidden. Details and cell mix:
   cell/slow-input region the design never signs off on, and are emitted unclamped
   rather than fabricated into monotonicity. No re-characterization; the
   vertical-slice pin is unaffected.
+- **`lib-v1.4` — defect M11: the output-transition tables were measured by
+  crossing ordinal, not by direction.** Every `rise_transition`/`fall_transition`
+  table of the five *inverting* cells (INV_X1/X2/X4, NAND2_X1, NOR2_X1) was
+  negative **and exchanged with its partner**. `.meas ... cross=N` counts the Nth
+  crossing of a level in *either* direction, and both thresholds of a transition
+  measurement sit on the *same* node, so on a cell whose output falls when its
+  input rises the 0.8·Vdd crossing precedes the 0.2·Vdd one and `targ − trig`
+  runs backwards. The delay arcs were never affected — their `trig` is
+  direction-qualified on the *input* — and the DFF was never affected because
+  `_dff_edge` has always used `rise=`/`fall=`. Fixed by measuring the same way
+  everywhere.
+  - **It was not a sign error.** The magnitudes were all present, on the wrong
+    tables: at (20 ps, 2 fF, tt) INV_X1 shipped −11.30 ps as `rise_transition`
+    when its rise is **20.97 ps**, and **NOR2_X1 understated its rise by 3.2×**
+    (15.68 vs **50.87 ps**) — the cell with the stacked-PMOS pull-up, and the
+    slowest ring on the vertical-slice die. An `abs()` would have left both wrong.
+  - **Why nothing caught it for four releases, and what now does.** OpenSTA does
+    not reject a negative transition, it *clamps* it, so vertical-slice signed
+    off with 20 of 21 driver rows at **zero input slew** and a "max slew
+    violations 0" that asserted nothing. `check_monotonic.py` — the guard whose
+    own docstring says a wrong-crossing regression "almost always breaks"
+    load-monotonicity — parsed only `cell_rise`/`cell_fall`. It now covers all
+    four tables and additionally asserts that transitions are **positive**, a
+    check available precisely *because* it is unavailable for delay (see
+    `lib-v1.3`: negative 50-50 delays here are real and deliberately unclamped,
+    so "a negative number in the liberty" could never have been the alarm).
+    Against the shipped library the extended guard reports **672 non-positive
+    transition values and 502 load-direction violations**; against this one, 0
+    and 0.
+  - **Blast radius is exactly the defect.** Re-characterizing all three corners
+    changes **14 value tables per corner and nothing else** — the 5 inverting
+    cells' 7 `rise_transition` + 7 `fall_transition` tables. Every delay, power,
+    leakage, capacitance, area and setup/hold table is byte-identical, BUF and
+    DFF are untouched in full, and `harden/cordic_gates.v` re-synthesizes
+    **byte-identical** (1805 own cells, 0 foundry). This is a timing-view
+    correction, not a design change.
+  - Downstream: vertical-slice must re-pin and re-harden, and its
+    `flow/ring_prediction.py` `abs()` workaround becomes a no-op. Its published
+    ring numbers **will move** — it was driving every stage with the
+    wrong-direction slew — so reproducing them would mean the fix had not taken.
+    `flow/v3/xcheck_liberty.py` scales `fall_transition` as a pull-down (NMOS)
+    arc, which for the inverting cells was the PMOS pull-up; regenerate
+    `out/own_devphys_xcheck.lib` from this release.
 
 ### Timing corners (lib-v1.1)
 

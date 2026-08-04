@@ -86,6 +86,20 @@ arcs of the signed-off BSIM `own.lib` are scaled by 1/k_N = 1/1.047 = **0.955**
 (−4.5 %); `cell_rise`/`rise_transition` stay on BSIM (PMOS pending stage-8);
 caps, power, leakage, areas, setup/hold untouched. 22 fall tables scaled.
 
+⚠️ **REGENERATED 2026-08-04 on `lib-v1.4`, and the previous emission had the
+NMOS ratio on the wrong arc.** The reasoning above was always right; its INPUT
+was not. Before `lib-v1.4` (defect M11) every inverting cell's
+`fall_transition` actually held the negated **rise** time, so this script
+faithfully applied the *pull-down* ratio to the *pull-up* arc on INV_X1/X2/X4,
+NAND2_X1 and NOR2_X1 — worst on NOR2_X1, whose stacked-PMOS pull-up is its
+weakest path. At (20 ps, 2 fF): `fall_transition` was −48.59 ps there and is
+now **14.98**; INV_X1 was −20.03 and is now **10.79**. `cell_fall` was never
+affected (the delay tables were already unateness-correct), and BUF/DFF were
+never affected at all. **The conclusion below is unchanged** — netlist, cell
+histogram and area are still identical — because technology mapping never
+depended on the transition tables. Only the *timing band* was being computed
+on the wrong half, and it now is not.
+
 `reharden_compare.py` synthesizes CORDIC-1 (`tt_um_joonatanalanampa_cordic`)
 against both libraries:
 

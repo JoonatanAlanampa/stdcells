@@ -445,6 +445,48 @@ def characterize_all():
 
 def emit_liberty(lib_cells):
     """Render the measured data as a Liberty file for the current PVT."""
+    # `default_fanout_load` is defect M15, and it is the ONLY attribute needed
+    # to fix it. OpenSTA computes a net's fanout by summing each sink pin's
+    # `fanout_load`, falling back to the library's `default_fanout_load` when
+    # the pin does not declare one. This library declared NEITHER, so every
+    # net summed to 0.0, `set_max_fanout 10` in signoff.sdc was unreachable by
+    # construction, and `design__max_fanout_violation__count` was a constant 0
+    # that vertical-slice's check_signoff.py quoted as assurance. Measured on
+    # a 12-sink net: without this line OpenSTA reports 0 violations; with it,
+    # `drv/Y limit 10 fanout 12 slack -2 (VIOLATED)`.
+    #
+    # Why 1, and why nothing else. sky130_fd_sc_hd -- the reference for what
+    # is conventional -- carries `default_fanout_load : 1.0` and has NO
+    # per-pin `fanout_load` and NO `max_fanout` anywhere. Both were tried and
+    # measured here:
+    #   * per-pin `fanout_load : 1;` on all 14 input pins is exactly redundant
+    #     with the header default (identical violation report), so it is
+    #     omitted as duplicated state.
+    #   * a per-output `max_fanout : N;` is NOT emitted on purpose. The
+    #     foundry does not, it would be a second source of truth racing the
+    #     SDC's design-level limit, and -- worse -- N would be a number nobody
+    #     measured, sitting in a characterized library next to the
+    #     `max_capacitance` that IS measured (the top of the LOADS sweep, i.e.
+    #     where these tables stop being interpolation). Fanout is the crude
+    #     proxy; capacitance is the real limit. Do not add a fabricated proxy
+    #     beside a measured quantity -- that is the defect this repo keeps
+    #     finding, not the fix for it.
+    # Keeping the load at exactly 1 per pin also keeps "fanout" meaning "sink
+    # count", which is what set_max_fanout 10 and every recorded violation
+    # figure assume.
+    #
+    # `power_lut_template` (not `lu_table_template`) for PTEMPLATE is defect
+    # M16, found while proving M15 because OpenSTA prints 18 warnings about it
+    # on every read and nobody had read them. Liberty keeps power templates in
+    # a SEPARATE namespace from timing templates: declaring pwr44 with
+    # `lu_table_template` means every `internal_power` table referencing it
+    # resolves to nothing, so OpenSTA silently DISCARDS all of them. Measured
+    # on the same 12-sink netlist: `report_power` gave internal power
+    # 0.00e+00 before and 5.47e-08 after -- 33.7% of total power, thrown away.
+    # The tables themselves were always correct; they were addressed to a
+    # namespace the tool does not look in. Same shape as M11-M15: measured
+    # data present in the artifact, silently ignored by the tool, and no check
+    # noticed because none looked.
     L = []
     L.append(f"""library (own_sky130_{CORNER}) {{
   technology (cmos);
@@ -452,6 +494,7 @@ def emit_liberty(lib_cells):
   time_unit : "1ns"; voltage_unit : "1V"; current_unit : "1mA";
   pulling_resistance_unit : "1kohm"; capacitive_load_unit (1, pf);
   leakage_power_unit : "1nW";
+  default_fanout_load : 1;
   nom_process : 1; nom_voltage : {VDD}; nom_temperature : {TEMP};
   operating_conditions ({CORNER}) {{ process : 1; voltage : {VDD}; temperature : {TEMP}; }}
   default_operating_conditions : {CORNER};
@@ -464,7 +507,7 @@ def emit_liberty(lib_cells):
     index_1("{', '.join(f'{s*1e9:.3f}' for s in SLEWS)}");
     index_2("{', '.join(f'{c*1e12:.3f}' for c in LOADS)}");
   }}
-  lu_table_template ({PTEMPLATE}) {{
+  power_lut_template ({PTEMPLATE}) {{
     variable_1 : input_transition_time; variable_2 : total_output_net_capacitance;
     index_1("{', '.join(f'{s*1e9:.3f}' for s in SLEWS)}");
     index_2("{', '.join(f'{c*1e12:.3f}' for c in LOADS)}");

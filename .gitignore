@@ -14,5 +14,7 @@ flow/offbin/*.lyrdb
 # Kept: flow/v3/*.py|png|json|md and the deliverable out/own_devphys_xcheck.lib
 out/*.txt
 out/_cmp_*
+# scratch netlist/SDC/tcl that check_liberty_sta.py hands to OpenSTA (lib-v1.5)
+out/sta_check/
 out/own_devphys_xcheck_abc.lib
 out/own_devphys_xcheck_hardening.lib

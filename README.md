@@ -255,6 +255,72 @@ characterized honestly, not hidden. Details and cell mix:
     `flow/v3/xcheck_liberty.py` scales `fall_transition` as a pull-down (NMOS)
     arc, which for the inverting cells was the PMOS pull-up; regenerate
     `out/own_devphys_xcheck.lib` from this release.
+- **`lib-v1.5` — defects M15 and M16: two attributes the tool never read.**
+  Neither was a wrong number. In both cases the measured data was correct and
+  present in the file, addressed so that OpenSTA never looked at it — and
+  every downstream check therefore reported a comfortable constant.
+  - **M15 — the library declared no fanout load at all.** OpenSTA computes a
+    net's fanout by summing `fanout_load` over its sink pins, falling back to
+    the library's `default_fanout_load`. This library emitted neither, so
+    every net in every design summed to **0.0**, `set_max_fanout 10` could not
+    be exceeded by any circuit whatsoever, and
+    `design__max_fanout_violation__count` was a constant. vertical-slice had
+    that metric in its `MUST_BE_ZERO` list and quoted it as assurance — the
+    sixth guard in this project found to be asserting a proxy, and the first
+    that had been promoted to a signoff gate before anyone checked it could
+    fail. Fixed with one header line, `default_fanout_load : 1;`.
+  - **What it was hiding**, measured on the shipped routed netlist of
+    vertical-slice run 30942289282: **22 driver pins over the limit**, worst
+    `wire82/Y` at fanout **29** against 10. And the mechanism is visible in
+    the violators' own names — `max_cap75..83`, `load_slew29..72`, `wire31..82`
+    are buffers OpenROAD's `repair_design` inserted to fix capacitance and
+    slew, which it then loaded with 20-29 sinks apiece **because the fanout
+    limit was invisible to the repair engine too**. The repair pass created
+    the nets that violate.
+  - **It is also M9's root cause.** The two max-capacitance violators at tt
+    are `wire82/Y` and `max_cap79/Y` — both in that fanout list, at 29 and 27
+    sinks. ~62 fF of pin load before a micron of wire, against a 100 fF limit.
+    Nothing enforced fanout, so nothing ever split them.
+  - **Why `default_fanout_load : 1` and deliberately nothing else.**
+    `sky130_fd_sc_hd` — the reference for what is conventional — carries
+    exactly this attribute, and has **no** per-pin `fanout_load` and **no**
+    `max_fanout` anywhere. Both alternatives were built and measured here:
+    per-pin `fanout_load : 1` on all 14 input pins is exactly redundant with
+    the header default (identical violation report), and a per-output
+    `max_fanout : N` was rejected on purpose — it would be a second source of
+    truth racing the SDC's design-level limit, and N would be a number nobody
+    measured sitting in a characterized library beside the `max_capacitance`
+    that *is* measured. Fanout is the crude proxy; capacitance is the real
+    limit. Keeping the load at exactly 1 per pin also keeps "fanout" meaning
+    "sink count", which is what `set_max_fanout 10` and every recorded
+    violation figure assume.
+  - **M16 — every `internal_power` table was silently discarded.** The power
+    grid template was declared with `lu_table_template` when Liberty keeps
+    power templates in a **separate namespace** requiring `power_lut_template`,
+    so all 18 tables resolved to nothing. OpenSTA said so, in 18 warnings, on
+    every read, for four library releases. Measured: reported internal power
+    **0.00e+00 before, 5.47e-08 after** — a third of total power. Found while
+    proving M15, purely because someone finally read the log.
+  - **The guard: `flow/check_liberty_sta.py`, and why it is not
+    `check_monotonic.py`.** That guard reads the liberty's *numbers*, and
+    could never have caught either defect, because both numbers were right;
+    what was wrong was whether the consuming tool could reach them — a
+    property of the liberty and the tool *together*, observable only by
+    running the tool. So the new guard runs OpenSTA on a netlist carrying a
+    12-sink and a 9-sink net and asserts the max-fanout check **fires on one
+    and stays quiet on the other** (a check wedged at "violated" is exactly as
+    useless as one wedged at "clean"), that no table template is left
+    unresolved, and that reported internal power is non-zero. Verified by
+    making it fail first: it rejects all three shipped lib-v1.4 corners,
+    naming both defects, and passes the fixed library. Asserting that
+    `default_fanout_load` appears in the text would have been one more proxy.
+  - **Blast radius.** Both fixes are emission-only — no measurement changed,
+    and every value table is byte-identical to lib-v1.4. Downstream,
+    vertical-slice must re-pin, and **its `gds` run is expected to go red**:
+    the 22 violations are real and have always been there, and making the
+    check honest is what surfaces them. The follow-on is a genuine design fix,
+    in the shape of M12's — margin for what the optimizer cannot see, never a
+    looser limit.
 
 ### Timing corners (lib-v1.1)
 

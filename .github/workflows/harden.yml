@@ -9,6 +9,7 @@ on:
       - "out/own_hardening_*.lib"
       - "flow/check_corner_spread.py"
       - "flow/check_monotonic.py"
+      - "flow/check_liberty_sta.py"
       - "out/own_cells.gds"
       - ".github/workflows/harden.yml"
   workflow_dispatch:
@@ -24,6 +25,17 @@ jobs:
       # physical early-trip of the asymmetric cells and are reported, not failed.
       - name: NLDM load-monotonicity guard
         run: python3 flow/check_monotonic.py
+
+      # lib-v1.5 (defects M15 + M16). check_monotonic above reads the liberty's
+      # NUMBERS and could never have caught either: both numbers were right,
+      # and what was wrong was whether OpenSTA could reach them. So this one
+      # runs OpenSTA on a 12-sink and a 9-sink net and asserts the max-fanout
+      # check actually fires on one and stays quiet on the other, plus that no
+      # table template is left unresolved (a dropped table is announced in a
+      # warning and then behaves exactly like data that was never measured).
+      # Uses the librelane image the harden step below pulls anyway.
+      - name: Liberty must be legible to OpenSTA
+        run: python3 flow/check_liberty_sta.py
 
       - name: Cache sky130 PDK
         uses: actions/cache@v4

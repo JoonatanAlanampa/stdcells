@@ -321,6 +321,136 @@ characterized honestly, not hidden. Details and cell mix:
     check honest is what surfaces them. The follow-on is a genuine design fix,
     in the shape of M12's — margin for what the optimizer cannot see, never a
     looser limit.
+- **`lib-v1.6` — defects M17 and M18: the DFF's timing constraints were a
+  placeholder and a search that could not return its own answer.** Unlike
+  M15/M16, these are wrong NUMBERS, and both were wrong in the unsafe
+  direction. Until this release the module docstring's claim that the flow
+  measures "setup and hold by bisection" was **false for hold**.
+  - **M17 — hold was never measured.** It was emitted as a literal
+    `values("0.0")` for both directions from `lib-v1.0` to `lib-v1.5`, in the
+    same `timing()` group whose setup beside it was searched for. It was
+    carried honestly as a deferral in this README, but the consequence was
+    not: vertical-slice lists `timing__hold_vio__count` in its `MUST_BE_ZERO`
+    set, and **a hold check against a requirement of zero cannot fail for the
+    reason hold actually fails** — the seventh guard in this project found to
+    be asserting something it could not test.
+  - **0.0 was not a conservative placeholder.** Measured at tt, this flop
+    **captures a rising D placed exactly ON the clock edge**, so the real hold
+    requirement for that direction is strictly positive and the shipped 0.0
+    was optimistic on every min-path in the chip.
+  - **M18 — the setup search returned its own lower bound.** Its bracket was
+    hard-coded `lo = 0.0` and taken on faith; it returned `hi`. When the true
+    boundary sat at or below zero every trial succeeded, `hi` halved to the
+    floor, and the value returned was `(hi-lo)/2**iters` — set by the
+    **iteration count**, not by the circuit. `1e-9/2**12 = 0.244 ps`, and
+    `0.00024` ns is precisely what the tt and ff liberties shipped for five
+    releases. It was never a measurement.
+  - **And one number was used for both D directions, which are not equal.**
+    D reaches the master through an input inverter that passes its two edges
+    at different speeds, so the sampling instant moves with direction. All
+    four are now measured separately, at every corner (ps):
+
+    | corner | setup rise | setup fall | hold rise | hold fall |
+    |---|---|---|---|---|
+    | `tt_025C_1v80` | -1.892 | +20.691 | +6.653 | -5.554 |
+    | `ss_100C_1v60` | **+19.775** | +43.274 | -11.047 | -17.761 |
+    | `ff_n40C_1v95` | -8.911 | +10.315 | **+12.146** | +0.244 |
+
+    against `0.00024` / `0.00024` / `0.01978` ns of setup for **both**
+    directions and `0.0` of hold everywhere, through lib-v1.5.
+  - ⚠️ **A coincidence to know before it misleads someone: `ff`'s hold for a
+    falling D is 0.244 ps, which the emitter renders as `0.00024` — character
+    for character the M18 floor artefact (`1e-9/2**12`) that this release
+    removes.** It is a genuine measurement that happens to land on a grid
+    point of the new bracket. The two are told apart by *which field*: M18's
+    `0.00024` was **setup**, at **tt and ff**; this one is **hold**, at **ff**
+    only, beside three other values that are nothing like a floor.
+  - **The one number that validates the method: `+19.775` ps.** ss is the only
+    corner where the old bracket was valid — its setup boundary is genuinely
+    positive, so `lo = 0.0` did not truncate it — and the old flow measured
+    `0.01978` ns there. The new search reproduces it. Where the old search
+    could work it agrees; where it could not, it was returning its floor.
+  - **The two that matter downstream.** `ff` is the **hold** corner and its
+    hold requirement for a rising D is **+12.146 ps**, against vertical-slice's
+    worst hold slack of 1.53 ps. And `ss` is the **setup** corner, where a
+    falling D needs **+43.274 ps** rather than the 19.775 that was being
+    applied to both directions.
+
+    So setup for a *falling* D was optimistic by ~20-24 ps while the file
+    claimed one number for both — in magnitude the larger of the two defects
+    at tt, though M17's is the one that lands on a signoff gate. Negative
+    values are real and are emitted as measured, as everywhere else in this
+    flow: a negative setup means D may change slightly after the clock edge
+    and still be captured, which is what an internally-buffered clock does.
+    `setup + hold > 0` per direction (+4.76, +15.14 ps) is the aperture, and
+    it is the physical sanity check on the pair.
+  - **The guard, and why it is not "assert the value is non-zero".** A hold
+    constraint is legitimately allowed to be zero or negative, so a
+    non-zero test would be a spelling test with a false-failure mode.
+    `check_liberty_sta.py` gained `check_hold()`, which runs OpenSTA on a
+    two-flop probe and separates two questions that a single comparison keeps
+    confusing: **is the field reached**, and **is the number in it real**.
+    Reachability is proved with a *synthetic* constraint — force both
+    directions to 0, then both to 1 ns, and the worst hold slack must move by
+    exactly 1 ns. The shipped numbers are checked against the `library hold
+    time` OpenSTA reports having applied. M17 is then the case where the tool
+    faithfully applies **0.00000 ns** because that is genuinely what the
+    library says.
+    **Verified in both directions.** It rejects the shipped lib-v1.5 —
+    *"zeroing the hold constraint changed worst hold slack by nothing
+    (0.09552 ns both ways), so the shipped constraint IS zero"* — and goes
+    quiet on the same library patched with a real constraint.
+  - **Running the guard is what caught three bugs in the guard**, none of
+    which a fail-only test would have shown.
+    1. `report_worst_slack` defaults to **two decimal places in ns** = 10 ps
+       granularity, coarser than the constraint being measured; a 6.65 ps
+       delta was quantised to exactly 10.000 ps. Both reports now pass
+       `-digits 5`.
+    2. It predicted that the *larger* requirement would bind. It does not:
+       OpenSTA reports the path with the smallest `arrival - required`, and
+       the **arrival differs by direction too**, so with rise `+6.65` and fall
+       `-5.55` declared it reported the **fall** arc. It now reads back the
+       `library hold time` the tool says it applied instead of guessing.
+    3. **The binding arc can move between the two runs being compared.** At
+       ff, with rise `+12.15` and fall `+0.24`, zeroing both handed the worst
+       path to the fall arc (whose arrival is 6.7 ps earlier), so the slack
+       moved by 5.48 ps and matched neither constraint. Nothing was wrong with
+       the library. That is why reachability is now proved with one synthetic
+       value on **both** arcs, which cannot switch what binds.
+  - **`_boundary()` now verifies its bracket**, widens it if it does not
+    bracket, and **raises** rather than returning a bound dressed as a
+    measurement. A search that cannot find the answer has to say so — silently
+    returning the edge of the search space is how a placeholder passed for a
+    measurement for five releases.
+  - **Blast radius — this one changes measured data, unlike lib-v1.5.** The
+    DFF's four constraint values move; every NLDM table is untouched.
+    Downstream, vertical-slice must re-pin and **its `gds` run is expected to
+    show hold violations**: worst hold slack there was **1.53 ps** against a
+    requirement of zero, and the requirement is now positive. Those violations
+    are real and have always been there. The follow-on is ordinary hold
+    repair, never a return to 0.0 and never dropping the metric from
+    `MUST_BE_ZERO`.
+  - 🔴 **M19, FOUND WHILE FIXING M17 AND DELIBERATELY NOT FIXED HERE: this
+    library declares no `min_pulse_width` anywhere.** The DFF's `CLK` pin
+    carries a capacitance and nothing else, so OpenSTA's
+    `check_min_pulse_width` has no requirement to check and cannot fail —
+    M17's exact shape, one pin over. It is not an omission the reference
+    shares: `sky130_fd_sc_hd__dfxtp_1` — the very cell this DFF is modelled on
+    — declares four timing types, `rising_edge`, `setup_rising`, `hold_rising`
+    and **`min_pulse_width`**; ours declares the first three and no
+    `min_pulse_width` anywhere in the library. It matters here specifically
+    because vertical-slice clocks a prescaler from a **ring oscillator**,
+    which is where a too-short clock pulse would actually come from. Fixing it
+    means measuring minimum high and low pulse widths — its own
+    characterization, and a separate piece of work from this release.
+  - **Independent corroboration that the new numbers have the right shape.**
+    `dfxtp_1`'s own foundry-characterized constraint tables contain **negative
+    entries, and markedly more of them on the `fall_constraint` of its hold
+    arc than on the rise** — the same asymmetry, in the same direction, that
+    this measurement finds (hold rise positive, hold fall negative). Two
+    things follow: negative constraints are normal rather than a symptom, and
+    a single scalar shared between the two directions was never going to be
+    right for this topology.
 
 ### Timing corners (lib-v1.1)
 
@@ -335,8 +465,11 @@ reproduces lib-v1.0 exactly (clk→Q 351 ps, setup ≈ 0).
 
 - Next legs: the vertical-slice tapeout consumes a pinned tag (now
   `lib-v1.2`); then v3 cells on devphys-derived custom device geometries.
-  Deferred, neither blocking the design: measuring the DFF hold constraint
-  (currently 0.0) and emitting DFF internal power.
+  ~~Deferred, neither blocking the design: measuring the DFF hold constraint
+  (currently 0.0)~~ — **the hold constraint is MEASURED as of `lib-v1.6`
+  (defect M17), and "neither blocking the design" was wrong**: it fed
+  vertical-slice's `timing__hold_vio__count` gate, which could not fail while
+  the requirement was zero. Still deferred: emitting DFF internal power.
 
 ## PVT analysis — custom library vs sky130_fd_sc_hd
 

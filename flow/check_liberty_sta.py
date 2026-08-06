@@ -22,6 +22,36 @@ constant.
     read for four library releases and nobody read them. Measured: reported
     internal power 0.00e+00 before, 5.47e-08 after — a third of total power.
 
+  * M17 [lib-v1.6] — the DFF hold constraint was the literal `0.0`, never
+    measured, for five releases. Same family, one step further out: with M15
+    the tool could not see a limit that was absent; here the tool could see
+    the number perfectly well and the number was a placeholder. The check it
+    fed — `timing__hold_vio__count` in vertical-slice's MUST_BE_ZERO list —
+    therefore could not fail for the reason hold actually fails.
+
+    The guard for it cannot be "assert the value is non-zero": a hold
+    constraint is legitimately allowed to be zero or negative, so that test
+    would be a spelling test with a false-failure mode. What can be demanded
+    is that the number MOVES SIGNOFF. So check_hold() runs the same design
+    twice — once with the liberty as shipped, once with its hold constraints
+    forced back to 0.0 — and asserts the worst hold slack differs by exactly
+    the constraint. If the library ships a placeholder the two runs are
+    identical and the delta is 0, which is the failure. Measured on lib-v1.5
+    (the pre-fix library) the delta was exactly 0.000 ns; on lib-v1.6 it is
+    the emitted hold time.
+
+    OpenSTA states the defect itself, if anyone runs the report. On lib-v1.5
+    `report_checks -path_delay min` over this probe prints, in the required-
+    time column of the launch->cap hold check:
+
+        0.00    0.00   clock reconvergence pessimism
+                0.00 ^ cap/CLK (DFF_X1)
+        0.00    0.00   library hold time          <-- M17, in the tool's words
+                0.00   data required time
+
+    which is why the guard is worth having: nothing was hidden, and the
+    number sat there for five releases behind a green metric.
+
 THE POINT, AND WHY THIS IS NOT check_monotonic.py
 -------------------------------------------------
 check_monotonic.py reads the liberty and checks its NUMBERS. It could never
@@ -98,17 +128,172 @@ report_power
 """
 
 
-def run_sta():
+def run_sta(script="probe.tcl"):
     if shutil.which("sta"):
-        cmd = ["sta", "-no_init", "-exit", "probe.tcl"]
+        cmd = ["sta", "-no_init", "-exit", script]
     elif shutil.which("docker"):
         cmd = ["docker", "run", "--rm", "-v", f"{WORK}:/w", "-w", "/w",
-               IMAGE, "sta", "-no_init", "-exit", "probe.tcl"]
+               IMAGE, "sta", "-no_init", "-exit", script]
     else:
         sys.exit("FAIL: neither `sta` nor `docker` on PATH — cannot run this "
                  "guard. On the Windows box, run it from inside WSL.")
     cp = subprocess.run(cmd, cwd=WORK, capture_output=True, text=True)
     return cp.stdout + cp.stderr
+
+
+# ---------------------------------------------------------------- M17 (hold)
+
+# Two flops, clock to clock, with the shortest data path a netlist can have.
+# The hold check at `cap` is then clk->Q plus a wire against the DFF's hold
+# requirement, which is the arc under test and nothing else.
+HOLD_V = """module hold_probe (clk, d, q);
+  input clk, d;
+  output q;
+  wire mid;
+  DFF_X1 launch (.D(d), .CLK(clk), .Q(mid));
+  DFF_X1 cap (.D(mid), .CLK(clk), .Q(q));
+endmodule
+"""
+
+# The input delay is half a period so the port->launch/D hold check cannot be
+# the worst one: the launch->cap path must be what sets the reported min slack,
+# or the delta below would be measuring some other arc's constraint.
+HOLD_SDC = """create_clock -name clk -period 10.0 [get_ports clk]
+set_input_delay -clock clk 5.0 [get_ports d]
+set_input_transition 0.05 [all_inputs]
+"""
+
+# -digits 5 on BOTH reports. `report_worst_slack -min` defaults to 2 decimal
+# places in ns, i.e. 10 ps granularity, which is coarser than the constraint
+# being measured -- the first draft of this guard quantised a 6.65 ps delta to
+# exactly 10.000 ps and then failed the library for it.
+HOLD_TCL = """read_liberty {lib}
+read_verilog hold_probe.v
+link_design hold_probe
+read_sdc hold_probe.sdc
+report_worst_slack -min -digits 5
+report_checks -path_delay min -digits 5
+"""
+
+WORST_MIN = re.compile(r"worst slack\s+min\s+(-?[\d.]+)", re.I)
+# The tool's own statement of the constraint it applied on the reported path.
+LIB_HOLD = re.compile(r"^\s*(-?[\d.]+)\s+(-?[\d.]+)\s+library hold time\s*$",
+                      re.M)
+
+# The emitted hold group, both directions, captured so they can be forced to
+# zero. Matching this shape also asserts the group exists at all -- a liberty
+# with no hold_rising arc would otherwise sail through every check here.
+HOLD_GROUP = re.compile(
+    r'(timing_type\s*:\s*hold_rising;\s*'
+    r'rise_constraint\s*\(scalar\)\s*\{\s*values\()"([^"]*)"(\);\s*\}\s*'
+    r'fall_constraint\s*\(scalar\)\s*\{\s*values\()"([^"]*)"(\))', re.S)
+
+
+def check_hold(lib):
+    """Assert the hold constraint reaches OpenSTA and moves hold slack by itself.
+
+    Runs the same two-flop design twice, changing exactly one thing: the hold
+    constraint in the liberty. See the M17 note in the module docstring for why
+    "is it non-zero" would be the wrong test.
+    """
+    WORK.mkdir(parents=True, exist_ok=True)
+    text = lib.read_text()
+    m = HOLD_GROUP.search(text)
+    if not m:
+        return [f"{lib.name}: no `hold_rising` constraint group found at all. "
+                f"Every sequential cell needs one; without it OpenSTA has no "
+                f"hold requirement to check and `timing__hold_vio__count` is "
+                f"meaningless."]
+    declared = (float(m.group(2)), float(m.group(4)))       # rise, fall (ns)
+
+    # DO NOT predict which of the two arcs OpenSTA will report. The worst min
+    # path is the one with the smallest (arrival - required), and the arrival
+    # differs by direction too -- launch/Q's falling edge is not as fast as its
+    # rising one. Measured while writing this: with rise +6.65 ps and fall
+    # -5.55 ps declared, OpenSTA reported the FALL arc, because that path's
+    # arrival is smaller by more than the 12 ps between the two requirements.
+    # So the guard reads back the constraint the tool says it used, and checks
+    # the file against THAT.
+    # Three runs, because a two-run delta is not arc-independent. Measured at
+    # ff, where the shipped values are rise +12.15 ps and fall +0.24 ps:
+    # zeroing BOTH made the fall path (whose arrival is 6.7 ps earlier) the
+    # worst one instead of the rise path, so the change in worst slack was
+    # 5.48 ps and matched neither constraint. Nothing was wrong with the
+    # library — the binding arc had moved out from under the comparison.
+    #
+    # So reachability is proved with a SYNTHETIC constraint instead: force both
+    # directions to zero, then both to PROBE ns. A single value on both arcs
+    # cannot switch which one binds, so the worst slack must move by exactly
+    # PROBE. The shipped numbers are checked separately, against the value
+    # OpenSTA reports having applied.
+    PROBE = 1.0
+    slacks, used = {}, {}
+    variants = (
+        ("real", text),
+        ("zeroed", HOLD_GROUP.sub(
+            lambda x: f'{x.group(1)}"0.0"{x.group(3)}"0.0"{x.group(5)}', text)),
+        ("probe", HOLD_GROUP.sub(
+            lambda x: f'{x.group(1)}"{PROBE}"{x.group(3)}"{PROBE}"{x.group(5)}',
+            text)),
+    )
+    for label, body in variants:
+        (WORK / f"hold_{label}.lib").write_text(body)
+        (WORK / "hold_probe.v").write_text(HOLD_V)
+        (WORK / "hold_probe.sdc").write_text(HOLD_SDC)
+        (WORK / f"hold_{label}.tcl").write_text(
+            HOLD_TCL.format(lib=f"hold_{label}.lib"))
+        log = run_sta(f"hold_{label}.tcl")
+        hit = WORST_MIN.search(log)
+        if not hit:
+            print(log[-3000:])
+            return [f"{lib.name}: OpenSTA reported no min-path slack for the "
+                    f"two-flop probe ({label} run) — cannot tell whether the "
+                    f"hold constraint is used."]
+        slacks[label] = float(hit.group(1))
+        h = LIB_HOLD.search(log)
+        if not h:
+            return [f"{lib.name}: the min-path report carries no `library hold "
+                    f"time` row ({label} run), so OpenSTA applied no hold "
+                    f"requirement to a flop-to-flop path at all."]
+        used[label] = float(h.group(2))
+
+    # 1. The file and the tool must agree: whichever arc OpenSTA reported, the
+    #    requirement it applied has to be one of the two the liberty declares.
+    if not any(abs(used["real"] - d) < 1e-9 for d in declared):
+        return [f"{lib.name}: OpenSTA applied a hold requirement of "
+                f"{used['real']*1000:+.3f} ps, which is neither of the values "
+                f"the liberty declares ({declared[0]*1000:+.3f} / "
+                f"{declared[1]*1000:+.3f} ps). The number in the file is not "
+                f"the number being checked against."]
+
+    # 2. The field must be REACHED and must move signoff proportionally. Both
+    #    directions carry the same value in these two runs, so the binding arc
+    #    cannot change between them and the shift must be exactly PROBE.
+    shift = slacks["zeroed"] - slacks["probe"]
+    if abs(shift - PROBE) > 5e-4:
+        return [f"{lib.name}: moving the hold constraint from 0 to {PROBE} ns "
+                f"shifted worst hold slack by {shift:.5f} ns, not {PROBE}. "
+                f"OpenSTA is not consuming the hold constraint in this liberty, "
+                f"so any hold verdict computed from it means nothing."]
+
+    # 3. M17 itself: a requirement of zero cannot be violated for the reason
+    #    hold is violated. Note this fires on what the TOOL used, not on the
+    #    text — and only when BOTH declared directions are zero, so a
+    #    legitimately-zero single arc is not condemned.
+    if used["real"] == 0.0 and all(d == 0.0 for d in declared):
+        return [f"{lib.name}: every hold constraint on this flop is 0.0, and "
+                f"OpenSTA duly applied 0.00000 ns on the worst min path — so "
+                f"hold is being signed off against a requirement that cannot "
+                f"be violated for the reason hold is violated. This is defect "
+                f"M17: the constraint was never measured. Measure it in "
+                f"flow/characterize.py (dff_constraints). Note the reachability "
+                f"check above PASSED — the field is wired up fine, the number "
+                f"in it is a placeholder."]
+    print(f"  {lib.name}: hold rise {declared[0]*1000:+.3f} ps / fall "
+          f"{declared[1]*1000:+.3f} ps — OpenSTA applied {used['real']*1000:+.3f} "
+          f"ps on the worst min path (slack {slacks['real']:.5f} ns), and a "
+          f"0 -> {PROBE} ns sweep moves it by {shift:.5f} ns")
+    return []
 
 
 def internal_power(log):
@@ -120,7 +305,10 @@ def internal_power(log):
 
 def check(lib):
     WORK.mkdir(parents=True, exist_ok=True)
-    shutil.copy(lib, WORK / "own.lib")
+    # copyfile, not copy: copy() also copies the mode bits, and chmod on the
+    # /mnt/c DrvFs mount raises EPERM, so `copy` makes this guard unrunnable
+    # locally under WSL — which is the only way to run it on the Windows box.
+    shutil.copyfile(lib, WORK / "own.lib")
     (WORK / "fanout_probe.v").write_text(netlist())
     (WORK / "fanout_probe.sdc").write_text(SDC)
     (WORK / "probe.tcl").write_text(TCL)
@@ -185,8 +373,9 @@ def main():
                  "characterize.py then make_hardening.py")
 
     print(f"probing {len(libs)} liberty file(s) with OpenSTA "
-          f"({OVER}-sink and {UNDER}-sink nets, set_max_fanout {LIMIT}):")
-    fails = [f for lib in libs for f in check(lib)]
+          f"({OVER}-sink and {UNDER}-sink nets, set_max_fanout {LIMIT}; "
+          f"two-flop hold probe):")
+    fails = [f for lib in libs for f in check(lib) + check_hold(lib)]
     if fails:
         print("\nFAIL — the tool cannot see what the library declares:")
         for f in fails:

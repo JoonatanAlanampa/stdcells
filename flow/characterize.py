@@ -4,7 +4,7 @@ Measured per cell, by us, from transistor-level transient simulation:
   - input capacitance per pin (charge integration)
   - NLDM delay (50/50) + output transition (20/80) tables, per input arc
   - internal_power (rise_power/fall_power) per input arc  [lib-v1.2]
-  - DFF: CLK->Q tables, setup and hold by bisection
+  - DFF: CLK->Q tables, setup and hold by bisection, per D direction [lib-v1.6]
   - per-state leakage (all 2^N input states)              [lib-v1.2]
 
 MULTI-PVT (lib-v1.1). Everything is re-measured at each of the three corners
@@ -56,6 +56,35 @@ The magnitudes were right; the labels were not. Downstream: OpenSTA clamps a
 negative transition to zero, so vertical-slice's entire signoff ran at ZERO
 input slew on 20 of its 21 driver rows and its "max slew violation count 0"
 asserted nothing. See arc_run for the mechanism and the measured numbers.
+
+lib-v1.6 FIXES defects M17 and M18, both in the DFF constraint measurement,
+and the line above ("setup and hold by bisection") was not true until now.
+
+  * M17 -- HOLD WAS NEVER MEASURED. It was emitted as a literal
+    `rise_constraint (scalar) { values("0.0"); }` for both directions, from
+    lib-v1.0 to lib-v1.5, in the same `timing()` group whose setup beside it
+    was searched for. It was carried as a known deferral in the README, but
+    the consequence was not stated: vertical-slice lists
+    `timing__hold_vio__count` in its MUST_BE_ZERO list, and a hold check
+    against a requirement of zero cannot fail for the reason hold fails.
+    Measured now, and 0.0 was not even a conservative placeholder -- at tt
+    this flop CAPTURES A RISING D PLACED EXACTLY ON THE CLOCK EDGE, so its
+    real hold requirement for that direction is strictly positive.
+
+  * M18 -- THE SETUP SEARCH COULD NOT RETURN ITS OWN ANSWER. Its bracket was
+    hard-coded lo = 0.0, taken on faith, and it returned `hi`. With the true
+    boundary at or below zero every trial succeeded, `hi` halved to the floor,
+    and the returned value was (hi-lo)/2**iters -- set by the iteration count,
+    not by the circuit. Both the tt and ff liberties shipped setup =
+    0.00024 ns for five releases, which is 1e-9/2**12 exactly. _boundary()
+    now verifies its bracket, widens it, and RAISES rather than returning a
+    bound dressed as a measurement.
+
+Both directions are now measured separately, because on this cell they are
+not equal and not even the same sign: the input inverter passes a rising and
+a falling D at different speeds, so the effective sampling instant moves with
+direction. Emitting one number for both -- which is what setup did -- is the
+same defect wearing different clothes.
 
 Note what this says about the guards. Negative DELAYS are real here (the
 paragraph above) and are deliberately not clamped -- so "a negative number in
@@ -316,41 +345,154 @@ def dff_clkq(cell, slew, load, tag):
             "tcqf": dn.get("tcq"), "trq2": dn.get("ttr2")}
 
 
-def dff_setup(cell):
-    """Bisection: latest D-rise before the CLK edge that still captures.
+CLK_EDGE = 12e-9          # the capture edge in every constraint netlist
+D_RAMP = 0.05e-9          # D transition time, unchanged from lib-v1.0
+CONSTRAINT_ITERS = 12     # (hi-lo)/2**12 over a 1.25 ns bracket = 0.3 ps
 
-    Same power-up hazard as dff_clkq: without a reset a flop that settles high
-    reads as "captured" for every trial and the bisection collapses to ~0 (the
-    bogus 'setup 0 ps' seen at ff). A reset edge at 3 ns forces Q=0 first, so
-    qfin>VDD/2 at the end means the capture edge genuinely wrote a 1.
+
+def _constraint_trial(cell, kind, edge, t, tag):
+    """One transient. True when the value the trial INTENDS to read wins.
+
+    kind "setup": D changes at CLK_EDGE - t, so t is the lead time on offer.
+        The intended value is the NEW one -- True means it got in.
+    kind "hold":  D changes at CLK_EDGE + t, so t is the hold time on offer.
+        The intended value is the OLD one -- True means the change came late
+        enough not to corrupt the capture.
+
+    `edge` is the direction of the D transition under test, which is exactly
+    what Liberty's rise_constraint / fall_constraint are indexed by. They are
+    measured SEPARATELY because they are not equal: D reaches the master
+    through an input inverter that passes its two edges at different speeds,
+    so the flop's effective sampling instant depends on the direction. On this
+    cell at tt the two hold boundaries land on OPPOSITE SIDES of zero, so
+    emitting one number for both would be the same defect in a new place.
+
+    Both kinds are preconditioned by the early clock pulse at 3.1 ns, which
+    loads the OPPOSITE of the value the trial expects to read at the end. That
+    makes "the intended value is there" an observable transition of Q rather
+    than a power-up state that would read as success for every trial -- the
+    hazard the old dff_setup docstring recorded as the bogus 'setup 0 ps'.
     """
-    lo, hi = 0.0, 1.0e-9               # D leads CLK by t: works at 1 ns
-    clk_edge = 12e-9
-    for _ in range(12):
-        t = (lo + hi) / 2
-        net = f"""* DFF setup probe t={t}
+    new = VDD if edge == "rise" else 0.0
+    old = 0.0 if edge == "rise" else VDD
+    if kind == "setup":
+        # D sits at `old` (which the reset pulse loads), then changes to `new`
+        # t before the capture edge. Success = Q ends at `new`.
+        tchg, want = CLK_EDGE - t, new
+        d = [(0.0, old), (tchg, old), (tchg + D_RAMP, new), (25e-9, new)]
+    else:
+        # D sits at `new` at the reset pulse (so Q loads !old), moves to `old`
+        # with generous setup, then back to `new` t AFTER the capture edge.
+        # Success = Q ends at `old`, i.e. the late change did not get in.
+        tchg, want = CLK_EDGE + t, old
+        d = [(0.0, new), (9.95e-9, new), (10e-9, old), (tchg, old),
+             (tchg + D_RAMP, new), (25e-9, new)]
+    # A PWL whose times are not increasing is silently accepted by some
+    # simulators and mis-parsed by others, and _boundary() may widen its
+    # bracket far enough to produce one (a hold t below about -2 ns would put
+    # the change before the D->old step at 10 ns). Fail loudly instead.
+    if any(b[0] <= a[0] for a, b in zip(d, d[1:])):
+        raise RuntimeError(
+            f"{tag}: t={t:.3e} s puts the D edge outside the window this "
+            f"netlist can express (times {[f'{x:.3e}' for x, _ in d]}). "
+            f"Widen the netlist, do not widen the search past it.")
+    pwl = " ".join(f"{x:.6e} {v:.4f}" for x, v in d)
+    net = f"""* DFF {kind} probe edge={edge} t={t}
 {HDR}
 {cell.spice()}
 vdd vdd 0 {VDD}
 vss vss 0 0
-vd D 0 pwl(0 0 {clk_edge - t} 0 {clk_edge - t + 0.05e-9} {VDD})
+vd D 0 pwl({pwl})
 vc CLK 0 pwl(0 0 3n 0 3.1n {VDD} 5n {VDD} 5.1n 0
-+  {clk_edge} 0 {clk_edge+0.1e-9} {VDD} {clk_edge+5e-9} {VDD} {clk_edge+5.1e-9} 0)
++  {CLK_EDGE} 0 {CLK_EDGE+0.1e-9} {VDD} {CLK_EDGE+5e-9} {VDD} {CLK_EDGE+5.1e-9} 0)
 xdut D CLK Q vdd vss {cell.name}
 cload Q 0 25f
-.tran 2p {clk_edge + 7e-9}
+.tran 2p {CLK_EDGE + 7e-9}
 .control
 run
-meas tran qfin find v(Q) at={clk_edge + 5e-9}
+meas tran qfin find v(Q) at={CLK_EDGE + 5e-9}
 .endc
 .end
 """
-        vals = parse_meas(run_ngspice(net, f"dff_setup_probe_{CORNER}"))
-        if vals.get("qfin", 0.0) > VDD / 2:
-            hi = t                      # captured -> can push closer
+    q = parse_meas(run_ngspice(net, tag)).get("qfin")
+    if q is None:
+        raise RuntimeError(f"{tag}: ngspice returned no qfin — see out/{tag}.log")
+    return abs(q - want) < VDD / 2
+
+
+def _boundary(trial, what, lo=-0.25e-9, hi=1.0e-9, iters=CONSTRAINT_ITERS):
+    """Smallest t for which `trial(t)` holds, by bisection on a VERIFIED bracket.
+
+    trial must be monotone in t -- later is safer -- which is the property that
+    makes a timing constraint a single number at all.
+
+    THE VERIFIED BRACKET IS THE POINT OF THIS HELPER (defect M18). The
+    bisection it replaces hard-coded lo = 0.0 and took it on faith, then
+    returned `hi`. When the true boundary sat at or below zero every trial
+    succeeded, `hi` halved all the way to the bottom, and the function returned
+    (hi-lo)/2**iters -- a number produced by the ITERATION COUNT, not by the
+    circuit. lib-v1.0..v1.5 shipped setup = 0.00024 ns at tt and at ff, which
+    is 1e-9/2**12 to the digit. Measured while closing M17: this flop still
+    captures a D edge placed exactly ON the clock edge, so its true setup is
+    <= 0 there and the old search could not have expressed it at all.
+
+    So the endpoints are evaluated and, if they do not bracket, widened; if
+    they still do not, this RAISES rather than returning its own lower bound.
+    A search that cannot find the answer must say so -- silently returning the
+    edge of the search space is how a placeholder gets mistaken for a
+    measurement for five releases.
+    """
+    flo, fhi = trial(lo), trial(hi)
+    for _ in range(4):
+        if flo:                        # boundary at or below lo -> widen down
+            span, hi, fhi = hi - lo, lo, flo
+            lo -= span
+            flo = trial(lo)
+        elif not fhi:                  # boundary above hi -> widen up
+            span, lo, flo = hi - lo, hi, fhi
+            hi += span
+            fhi = trial(hi)
         else:
-            lo = t
+            break
+    if flo or not fhi:
+        raise RuntimeError(
+            f"{what} at {CORNER}: could not bracket the boundary in "
+            f"[{lo*1e12:.1f}, {hi*1e12:.1f}] ps (trial(lo)={flo}, "
+            f"trial(hi)={fhi}). Not returning a bound as if it were a "
+            f"measurement — see the M18 note in _boundary().")
+    for _ in range(iters):
+        mid = (lo + hi) / 2
+        if trial(mid):
+            hi = mid
+        else:
+            lo = mid
     return hi
+
+
+def dff_constraints(cell):
+    """Measure setup AND hold, each for both D directions. Four numbers.
+
+    Returns {"setup": {"rise": s, "fall": s}, "hold": {"rise": h, "fall": h}}
+    in seconds. Negative values are real and are emitted as measured: a
+    negative setup means D may change slightly after the clock edge and still
+    be captured (this topology buffers CLK internally, so the master closes
+    after the pin edge), and a negative hold is its mirror.
+
+    Defect M17: hold was never measured. It was emitted as a literal 0.0 for
+    both directions from lib-v1.0 to lib-v1.5 while setup beside it was
+    searched for -- and vertical-slice put `timing__hold_vio__count` in its
+    MUST_BE_ZERO list, where a check against a requirement of zero cannot fail
+    for the reason hold actually fails.
+    """
+    out = {}
+    for kind in ("setup", "hold"):
+        out[kind] = {}
+        for edge in ("rise", "fall"):
+            tag = f"dff_{kind}_{edge}_{CORNER}"
+            out[kind][edge] = _boundary(
+                lambda t, k=kind, e=edge, g=tag: _constraint_trial(cell, k, e, t, g),
+                f"{kind}_{edge}")
+    return out
 
 
 def table(name, rows, template=None, scale=1e9):
@@ -415,10 +557,16 @@ def characterize_all():
                 m = dff_clkq(cell, s, c, f"dffq_{CORNER}_{i}{j}")
                 for k in tables:
                     tables[k][i, j] = m.get(k, np.nan)
-            tsu = dff_setup(cell)
-            lib_cells.append((cell, caps, leak, {"clkq": tables, "setup": tsu}))
+            con = dff_constraints(cell)
+            lib_cells.append((cell, caps, leak,
+                              {"clkq": tables, "setup": con["setup"],
+                               "hold": con["hold"]}))
             print(f"  {cell.name}: clk-q {tables['tcqr'][REP_S, REP_L]*1e12:.0f} ps, "
-                  f"setup {tsu*1e12:.0f} ps, cin(D) {caps['D']*1e15:.2f} fF, "
+                  f"setup {con['setup']['rise']*1e12:+.1f}/"
+                  f"{con['setup']['fall']*1e12:+.1f} ps (rise/fall), "
+                  f"hold {con['hold']['rise']*1e12:+.1f}/"
+                  f"{con['hold']['fall']*1e12:+.1f} ps, "
+                  f"cin(D) {caps['D']*1e15:.2f} fF, "
                   f"leak {leak['avg']*1e12:.1f} pW")
         else:
             states = leakage_states(cell)
@@ -522,16 +670,28 @@ def emit_liberty(lib_cells):
                      f'value : {w*1e9:.6f}; }}')
         if cell.clocked:
             L.append("    ff (IQ, IQN) { next_state : \"D\"; clocked_on : \"CLK\"; }")
-            tsu = data["setup"] * 1e9
+            # M17/M18: all four of these are measured, per D direction. Hold
+            # was a literal 0.0 through lib-v1.5 and setup was one number used
+            # for both directions -- and the two directions are not equal on
+            # this cell (see dff_constraints). Negatives are emitted as
+            # measured, as everywhere else in this flow.
+            # ⚠️ COINCIDENCE WORTH KNOWING: ff's measured hold for a falling D
+            # is 0.244 ps, which at .5f renders as "0.00024" -- character for
+            # character the M18 floor artefact (1e-9/2**12) that these values
+            # replace. It is a real measurement here and it lands on a
+            # legitimate grid point of the new bracket. Do not read a shipped
+            # 0.00024 as evidence of M18 without checking which field it is in:
+            # M18's was in setup at tt AND ff, this is hold at ff only.
+            su, ho = data["setup"], data["hold"]
             L.append(f"""    pin (CLK) {{ direction : input; clock : true;
           capacitance : {caps['CLK']*1e12:.6f}; }}
         pin (D) {{ direction : input; capacitance : {caps['D']*1e12:.6f};
           timing () {{ related_pin : "CLK"; timing_type : setup_rising;
-            rise_constraint (scalar) {{ values("{tsu:.5f}"); }}
-            fall_constraint (scalar) {{ values("{tsu:.5f}"); }} }}
+            rise_constraint (scalar) {{ values("{su['rise']*1e9:.5f}"); }}
+            fall_constraint (scalar) {{ values("{su['fall']*1e9:.5f}"); }} }}
           timing () {{ related_pin : "CLK"; timing_type : hold_rising;
-            rise_constraint (scalar) {{ values("0.0"); }}
-            fall_constraint (scalar) {{ values("0.0"); }} }} }}
+            rise_constraint (scalar) {{ values("{ho['rise']*1e9:.5f}"); }}
+            fall_constraint (scalar) {{ values("{ho['fall']*1e9:.5f}"); }} }} }}
         pin (Q) {{ direction : output; function : "IQ";
           max_capacitance : {LOADS[-1]*1e12:.3f}; max_transition : {SLEWS[-1]*1e9:.3f};
           timing () {{ related_pin : "CLK"; timing_type : rising_edge;

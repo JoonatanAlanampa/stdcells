@@ -430,6 +430,21 @@ characterized honestly, not hidden. Details and cell mix:
     are real and have always been there. The follow-on is ordinary hold
     repair, never a return to 0.0 and never dropping the metric from
     `MUST_BE_ZERO`.
+  - ⚠️ **KNOWN LIMITATION OF ALL FOUR NUMBERS, STATED SO NOBODY INFERS MORE
+    THAN IS THERE: these are CAPTURE-BOUNDARY constraints, not the
+    degradation-criterion constraints a commercial library ships.** The search
+    asks only "did the intended value end up in the flop", which is the
+    metastability edge — the last point at which it still resolves *at all*.
+    Industry signoff instead takes the point where clk→Q has degraded by a
+    fixed amount (commonly 10%), which lands earlier and is therefore more
+    pessimistic. Near the boundary this flop's clk→Q blows up, and the NLDM
+    tables beside it are measured far from that region, so **setup and hold
+    are optimistic by an unquantified margin relative to a foundry library**.
+    This is not new to lib-v1.6 — the setup search has worked this way since
+    lib-v1.0 — but M17 is exactly the class of "a number that means less than
+    it looks", and the fix should not quietly create a smaller one. Closing it
+    means re-running each bisection against a clk→Q degradation target instead
+    of a boolean, which is a change of criterion, not of code shape.
   - 🔴 **M19, FOUND WHILE FIXING M17 AND DELIBERATELY NOT FIXED HERE: this
     library declares no `min_pulse_width` anywhere.** The DFF's `CLK` pin
     carries a capacitance and nothing else, so OpenSTA's

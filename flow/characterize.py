@@ -483,6 +483,19 @@ def dff_constraints(cell):
     searched for -- and vertical-slice put `timing__hold_vio__count` in its
     MUST_BE_ZERO list, where a check against a requirement of zero cannot fail
     for the reason hold actually fails.
+
+    ⚠️ WHAT THESE NUMBERS ARE NOT. This is a CAPTURE-BOUNDARY criterion: the
+    trial asks only whether the intended value ended up in the flop, so the
+    answer is the metastability edge -- the last point at which it resolves at
+    all. A commercial library instead reports the point where clk->Q has
+    degraded by a fixed fraction (commonly 10%), which lands earlier and is
+    more pessimistic. Near this boundary clk->Q blows up, and the NLDM tables
+    are measured nowhere near it, so all four constraints are OPTIMISTIC by an
+    unquantified margin against foundry practice. That is inherited from the
+    setup search, not introduced here, and it is written down because M17 was
+    precisely a number that meant less than it looked; the replacement should
+    not quietly be a smaller one. Closing it is a change of CRITERION -- bisect
+    against a clk->Q degradation target instead of a boolean -- not of shape.
     """
     out = {}
     for kind in ("setup", "hold"):
